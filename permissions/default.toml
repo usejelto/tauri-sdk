@@ -1,0 +1,3 @@
+[default]
+description = "Allows the seven Jelto SDK operations. Grant only to chosen local application windows. Collection still requires explicit init."
+permissions = ["allow-init", "allow-track", "allow-onboarding", "allow-set-props", "allow-install-id", "allow-reset", "allow-disable"]

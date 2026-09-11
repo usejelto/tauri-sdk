@@ -1,0 +1,56 @@
+[package]
+name = "tauri-plugin-jelto"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.94"
+description = "Privacy-preserving Jelto analytics for Tauri 2 desktop applications"
+license = "MIT"
+repository = "https://github.com/usejelto/tauri-sdk"
+links = "tauri-plugin-jelto"
+# Anchor file names to this package: unanchored README/LICENSE patterns also
+# include dependency and conformance-tool files beneath ignored directories.
+include = ["/src/**", "/build.rs", "/permissions/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE"]
+
+[features]
+default = ["tauri"]
+tauri = ["dep:tauri", "dep:tauri-plugin"]
+conformance = []
+
+[dependencies]
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+os_info = { version = "3", default-features = false }
+rand = "0.9"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+tauri = { version = "2", default-features = false, optional = true }
+tempfile = "3"
+tokio = { version = "1", features = ["rt", "sync", "time", "macros", "net", "io-util", "io-std"] }
+uuid = { version = "1", features = ["v4"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"], optional = true }
+
+[dev-dependencies]
+tauri = { version = "2", default-features = false, features = ["test"] }
+tauri-utils = "2"
+toml = "0.8"
+
+[[bin]]
+name = "conformance-host"
+path = "src/bin/conformance-host.rs"
+required-features = ["conformance"]
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
+[package.metadata.platforms.support]
+macos = { level = "full" }
+windows = { level = "full" }
+linux = { level = "full" }
+ios = { level = "none" }
+android = { level = "none" }

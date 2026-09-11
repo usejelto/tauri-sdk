@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>Jelto Tauri example</title></head>
+  <body>
+    <main>
+      <h1>Jelto Tauri example</h1>
+      <p>Collection starts when you enable analytics. Requests go to the endpoint below.</p>
+      <label>Product key <input id="key" value="prd_conform001" /></label>
+      <label>App identifier <input id="app" value="desktop" /></label>
+      <label>Ingest endpoint <input id="endpoint" value="http://127.0.0.1:8398/v1/e" /></label>
+      <label class="consent"><input id="consent" type="checkbox" /> Allow anonymous app analytics</label>
+      <button id="enable">Enable analytics</button>
+      <div class="actions">
+        <button id="track" disabled>Track export</button>
+        <button id="onboarding" disabled>Complete onboarding</button>
+        <button id="paid" disabled>Set paid license</button>
+        <button id="reset" disabled>Reset identity</button>
+        <button id="disable" disabled>Disable and erase local state</button>
+      </div>
+      <p role="status" id="status">Analytics is off.</p>
+      <p>Install ID: <output id="identity">None</output></p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

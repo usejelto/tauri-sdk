@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-install-id"
+description = "Enables the install_id command without any pre-configured scope."
+commands.allow = ["install_id"]
+
+[[permission]]
+identifier = "deny-install-id"
+description = "Denies the install_id command without any pre-configured scope."
+commands.deny = ["install_id"]

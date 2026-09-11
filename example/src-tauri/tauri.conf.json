@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Jelto Tauri Example",
+  "version": "0.1.0",
+  "identifier": "io.jelto.tauri-example",
+  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://127.0.0.1:1420", "frontendDist": "../dist" },
+  "app": {
+    "windows": [{ "label": "main", "title": "Jelto Tauri Example", "width": 780, "height": 760 }],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost" }
+  },
+  "bundle": { "active": false }
+}

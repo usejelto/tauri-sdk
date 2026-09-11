@@ -1,0 +1,11 @@
+:root { font: 16px/1.5 system-ui, sans-serif; color: #1e293b; background: #f8fafc; }
+body { margin: 0; }
+main { max-width: 42rem; margin: 2rem auto; padding: 1.5rem; }
+label { display: grid; gap: .25rem; margin: 1rem 0; }
+input, button { font: inherit; padding: .6rem; border: 1px solid #94a3b8; border-radius: .4rem; }
+.consent { display: flex; align-items: center; }
+button { cursor: pointer; background: white; }
+button:disabled { cursor: default; opacity: .5; }
+button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.5rem; }
+output { overflow-wrap: anywhere; }

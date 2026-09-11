@@ -1,0 +1,42 @@
+{
+  "name": "@jelto/tauri",
+  "version": "1.0.0",
+  "description": "Jelto analytics bindings for the Tauri 2 desktop plugin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usejelto/tauri-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/usejelto/tauri-sdk/issues"
+  },
+  "homepage": "https://github.com/usejelto/tauri-sdk",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "5.0.0"
+  }
+}

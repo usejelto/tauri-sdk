@@ -1,0 +1,114 @@
+# Governing contract: spec/ci.md §7 in the source monorepo; see RELEASING.md.
+name: tauri release
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this tag after checks (also requires RELEASE_PUBLISH_ENABLED)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python3 vendor/release-tools/release.py validate
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  publish:
+    needs: [validate, checks]
+    if: vars.RELEASE_PUBLISH_ENABLED == 'true' && (github.event_name == 'push' || inputs.publish)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Pinned npm with trusted publishing
+        run: npm install --global npm@11.14.0 --ignore-scripts
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev patchelf xvfb
+      - name: Pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-Linux
+          path: release-artifacts/
+      - name: Verify artifact source and contents
+        run: python3 vendor/release-tools/release.py verify
+      - name: Check existing registry versions
+        id: registry
+        run: python3 vendor/release-tools/release.py status
+      - name: Verify Cargo bytes before publishing
+        if: steps.registry.outputs.cargo_exists != 'true'
+        run: |
+          cargo publish --dry-run --locked
+          cargo package --locked
+          cmp target/package/*.crate release-artifacts/*.crate
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: cargo-auth
+        if: steps.registry.outputs.cargo_exists != 'true'
+      - name: Publish Rust crate
+        if: steps.registry.outputs.cargo_exists != 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.cargo-auth.outputs.token }}
+        run: cargo publish --locked
+      - name: Wait for Rust before npm
+        run: python3 vendor/release-tools/release.py wait --kind cargo
+      - name: Publish verified npm tarball
+        if: steps.registry.outputs.npm_exists != 'true'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          dist_tag=latest
+          if [[ "$RELEASE_TAG" == *-* ]]; then dist_tag=next; fi
+          npm publish release-artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$dist_tag" --registry https://registry.npmjs.org
+      - name: Verify registry contents and installation
+        run: |
+          python3 vendor/release-tools/release.py wait
+          python3 vendor/release-tools/release.py smoke --registry
+      - name: Create or finish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 vendor/release-tools/release.py github

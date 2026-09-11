@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-onboarding"
+description = "Enables the onboarding command without any pre-configured scope."
+commands.allow = ["onboarding"]
+
+[[permission]]
+identifier = "deny-onboarding"
+description = "Denies the onboarding command without any pre-configured scope."
+commands.deny = ["onboarding"]
