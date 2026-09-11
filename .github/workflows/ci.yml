@@ -54,6 +54,8 @@ jobs:
           package-manager-cache: false
       - name: Pinned npm packaging toolchain
         run: npm install --global npm@11.14.0 --ignore-scripts
+      - name: Dependency vulnerability check
+        run: npm audit --audit-level=moderate --package-lock-only
       - name: Install verified contracts pin
         if: inputs.release || inputs.conformance
         run: python3 vendor/release-tools/release.py contracts
@@ -67,6 +69,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev patchelf xvfb
       - name: Pinned Rust toolchain
         run: rustup show active-toolchain
+      - name: Cargo dependency vulnerability check
+        if: runner.os == 'Linux'
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
       - name: Component tests and packages
         run: make test build package
       - name: Conformance twice
