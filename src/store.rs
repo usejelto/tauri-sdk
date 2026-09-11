@@ -102,6 +102,22 @@ impl Store {
             return;
         }
         self.state = state;
+        // A retry body from another product key cannot be replayed under this
+        // identity; treat it as no pending batch rather than trusting it.
+        let drop_retry = self.state.retry.as_ref().is_some_and(|retry| {
+            serde_json::from_str::<serde_json::Value>(&retry.body)
+                .ok()
+                .and_then(|body| {
+                    body.get("p")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                })
+                .as_deref()
+                != Some(self.state.key.as_str())
+        });
+        if drop_retry {
+            self.state.retry = None;
+        }
         loop {
             line.clear();
             if !matches!(reader.read_line(&mut line), Ok(n) if n > 0) {
@@ -194,12 +210,24 @@ impl Store {
         let Some(dir) = &self.dir else {
             return Err(io::Error::other("no state directory"));
         };
-        fs::create_dir_all(dir)?;
+        // A symlinked state directory is never followed: chmod-ing or writing
+        // through it could affect a path the caller never configured.
+        if fs::symlink_metadata(dir).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(io::Error::other("state directory is a symlink"));
+        }
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+            fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(dir)?;
+            // DirBuilder's mode only applies to directories it creates; a
+            // pre-existing directory keeps its old mode unless reasserted here.
             fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
         }
+        #[cfg(not(unix))]
+        fs::create_dir_all(dir)?;
         let mut temp = tempfile::Builder::new()
             .prefix(".jelto-")
             .tempfile_in(dir)?;
@@ -241,13 +269,36 @@ impl Store {
         self.journal_bytes = 0;
         self.transition_pending = false;
     }
+    /// Removes only the files the SDK itself created; a directory the caller
+    /// configured (and may have populated with unrelated files) is never
+    /// recursively deleted.
     pub fn wipe(&mut self) {
         self.clear();
-        if let Some(dir) = &self.dir {
-            if let Err(err) = fs::remove_dir_all(dir) {
+        let Some(dir) = self.dir.clone() else {
+            return;
+        };
+        let debug = self.debug;
+        let remove_file = |path: &std::path::Path| {
+            if let Err(err) = fs::remove_file(path) {
                 if err.kind() != io::ErrorKind::NotFound {
-                    log(self.debug, "storage wipe failed");
+                    log(debug, "storage wipe failed");
                 }
+            }
+        };
+        remove_file(&dir.join("state.jsonl"));
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().starts_with(".jelto-") {
+                    remove_file(&entry.path());
+                }
+            }
+        }
+        if let Err(err) = fs::remove_dir(&dir) {
+            if !matches!(
+                err.kind(),
+                io::ErrorKind::NotFound | io::ErrorKind::DirectoryNotEmpty
+            ) {
+                log(debug, "storage wipe failed");
             }
         }
     }
@@ -357,5 +408,65 @@ mod tests {
         assert_eq!(recovered.state.last_app_version, "B");
         assert!(!recovered.contains("app_updated"));
         assert!(recovered.state.retry.is_none());
+    }
+
+    #[test]
+    fn retry_with_mismatched_product_key_is_dropped_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::new(Some(dir.path().into()), false);
+        store.state.key = "prd_conform001".into();
+        store.state.install_id = uuid::Uuid::new_v4().to_string();
+        store.state.retry = Some(Batch {
+            body: r#"{"v":1,"p":"prd_other0001","e":[]}"#.into(),
+            ids: vec![],
+            install: false,
+            probe: false,
+        });
+        assert!(store.checkpoint());
+        let mut recovered = Store::new(Some(dir.path().into()), false);
+        recovered.load();
+        assert_eq!(recovered.state.install_id, store.state.install_id);
+        assert!(recovered.state.retry.is_none());
+    }
+
+    #[test]
+    fn disable_removes_only_sdk_files_and_keeps_a_populated_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("unrelated.txt"), b"keep me").unwrap();
+        let mut store = Store::new(Some(dir.path().into()), false);
+        store.state.install_id = uuid::Uuid::new_v4().to_string();
+        store.append(Event::new("x", &BigInt::from(0), Props::new(), false));
+        assert!(store.checkpoint());
+        assert!(dir.path().join("state.jsonl").exists());
+        store.wipe();
+        assert!(dir.path().join("unrelated.txt").exists());
+        assert!(!dir.path().join("state.jsonl").exists());
+        assert!(dir.path().exists());
+        assert_eq!(store.state.install_id, "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fresh_dir_is_0700_and_a_symlinked_state_dir_is_treated_as_unavailable() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = tempfile::tempdir().unwrap();
+        let real = base.path().join("state");
+        let mut store = Store::new(Some(real.clone()), false);
+        assert!(store.checkpoint());
+        let mode = fs::metadata(&real).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+
+        let target = base.path().join("target");
+        fs::create_dir(&target).unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).unwrap();
+        let link = base.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let mut linked = Store::new(Some(link.clone()), false);
+        // Storage is unavailable, but the SDK still answers calls without panicking.
+        assert!(!linked.checkpoint());
+        linked.append(Event::new("x", &BigInt::from(0), Props::new(), false));
+        assert_eq!(linked.queue.len(), 1);
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755, "symlink target must not be chmoded");
     }
 }

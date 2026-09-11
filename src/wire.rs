@@ -41,10 +41,11 @@ pub(crate) fn valid_props(props: &Props, debug: bool) -> bool {
         Some("props: spec/wire-v1.md §3 caps them at 20")
     } else if props.keys().any(|key| !grammar(key, 1, 32, "_")) {
         Some("props keys must match ^[a-z0-9_]{1,32}$")
-    } else if props
-        .values()
-        .any(|v| matches!(v, PropValue::String(s) if s.chars().count() > 200))
-    {
+    } else if props.values().any(|v| match v {
+        PropValue::String(s) => s.chars().count() > 200,
+        PropValue::Number(n) => n.to_string().chars().count() > 200,
+        PropValue::Boolean(_) => false,
+    }) {
         Some("props: spec/wire-v1.md §3 caps a string at 200")
     } else {
         None
@@ -271,6 +272,7 @@ pub(crate) async fn post(
     endpoint: String,
     mock: Option<String>,
     body: String,
+    debug: bool,
 ) -> Outcome {
     let failure = || Outcome {
         status: 0,
@@ -285,7 +287,10 @@ pub(crate) async fn post(
         .header("Content-Type", "application/json")
         .body(body);
     if let Some(mock) = mock {
-        request = request.header("X-Mock", mock);
+        match reqwest::header::HeaderValue::from_str(&mock) {
+            Ok(value) => request = request.header("X-Mock", value),
+            Err(_) => log(debug, "JELTO_MOCK is not a valid header value; omitted"),
+        }
     }
     let Ok(mut response) = request.send().await else {
         return failure();

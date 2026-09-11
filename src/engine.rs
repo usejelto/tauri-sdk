@@ -182,14 +182,64 @@ impl Options {
                 .map(PathBuf::from)
                 .or(dir),
             av,
-            now: std::env::var("JELTO_NOW").ok().and_then(|s| whole(&s)),
+            now: harness_now(),
+            // An empty JELTO_ENDPOINT is absent (the production default applies).
+            // A non-empty value, valid or not, is validated at initialize() time
+            // so an invalid override leaves the SDK inactive rather than falling
+            // through (spec/wire-v1.md §1).
             endpoint: std::env::var("JELTO_ENDPOINT")
-                .unwrap_or_else(|_| "https://in.jelto.io/v1/e".into()),
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "https://in.jelto.io/v1/e".into()),
             debug: std::env::var("JELTO_DEBUG").is_ok_and(|s| s == "1"),
-            version: std::env::var("JELTO_CLIENT_VERSION").ok(),
-            mock: std::env::var("JELTO_MOCK").ok(),
+            version: harness_client_version(),
+            mock: harness_mock(),
         }
     }
+}
+// These three overrides exist only for the conformance harness and tests; a
+// production build must not let the environment steer the clock, client
+// version string or mock header.
+#[cfg(any(test, feature = "conformance"))]
+fn harness_now() -> Option<BigInt> {
+    std::env::var("JELTO_NOW").ok().and_then(|s| whole(&s))
+}
+#[cfg(not(any(test, feature = "conformance")))]
+fn harness_now() -> Option<BigInt> {
+    None
+}
+#[cfg(any(test, feature = "conformance"))]
+fn harness_client_version() -> Option<String> {
+    std::env::var("JELTO_CLIENT_VERSION").ok()
+}
+#[cfg(not(any(test, feature = "conformance")))]
+fn harness_client_version() -> Option<String> {
+    None
+}
+#[cfg(any(test, feature = "conformance"))]
+fn harness_mock() -> Option<String> {
+    std::env::var("JELTO_MOCK").ok()
+}
+#[cfg(not(any(test, feature = "conformance")))]
+fn harness_mock() -> Option<String> {
+    None
+}
+
+/// spec/wire-v1.md §1: an endpoint must be an absolute http(s) URL with no userinfo.
+fn valid_endpoint(s: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(s) else {
+        return false;
+    };
+    matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
+/// `Metadata::detect` maps an unrecognized OS or CPU architecture to "".
+/// Mirrors the desktop SDKs: an unsupported platform never activates.
+fn supported(metadata: &Metadata) -> bool {
+    !metadata.os.is_empty() && !metadata.arch.is_empty()
 }
 
 struct Worker {
@@ -390,6 +440,7 @@ impl Worker {
     }
     fn initialize(&mut self, key: String, app: Option<String>, endpoint: Option<String>) {
         if self.active {
+            log(self.options.debug, "init ignored: already initialized");
             return;
         }
         if !key
@@ -409,11 +460,29 @@ impl Worker {
             }
             valid
         });
-        self.endpoint = endpoint.unwrap_or_else(|| self.options.endpoint.clone());
-        self.metadata = Some(Metadata::detect(
+        // An empty explicit endpoint is absent (JELTO_ENDPOINT applies next);
+        // any other value, explicit or from the environment, must be an
+        // absolute http(s) URL with no userinfo or the SDK stays inactive.
+        let endpoint = endpoint
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| self.options.endpoint.clone());
+        if !valid_endpoint(&endpoint) {
+            log(
+                self.options.debug,
+                "drop init: endpoint must be an absolute http(s) URL without userinfo",
+            );
+            return;
+        }
+        let metadata = Metadata::detect(
             &self.options.av,
             client_version(self.options.version.clone(), self.options.debug),
-        ));
+        );
+        if !supported(&metadata) {
+            log(self.options.debug, "drop init: unsupported desktop platform");
+            return;
+        }
+        self.endpoint = endpoint;
+        self.metadata = Some(metadata);
         self.store.load();
         self.active = true;
         self.install_enqueued = self.store.contains("install");
@@ -612,6 +681,7 @@ impl Worker {
                         self.endpoint.clone(),
                         self.options.mock.clone(),
                         batch.body.clone(),
+                        self.options.debug,
                     )),
                     ids: batch.ids.clone(),
                     install: batch.install,
@@ -647,7 +717,7 @@ impl Worker {
             .unwrap_or(DAY);
         Duration::from_millis(ms.min(DAY))
     }
-    fn batch(&self, now: &BigInt, probe: bool) -> Option<Batch> {
+    fn batch(&mut self, now: &BigInt, probe: bool) -> Option<Batch> {
         let metadata = self.metadata.as_ref()?;
         let state = &self.store.state;
         let mut batch = Batch {
@@ -669,17 +739,34 @@ impl Worker {
                 .filter_map(|s| serde_json::from_str(s).ok())
                 .collect()
         };
+        // Neither an unrenderable event nor one whose rendered form alone exceeds
+        // MAX_BYTES can ever be sent; either would wedge every later event behind
+        // it forever if it just broke out of the loop, so it is retired instead.
+        let mut unsendable = Vec::new();
         for event in events {
-            let rendered =
-                metadata.render(&event, &state.install_id, &state.app, &state.install_props)?;
+            let Some(rendered) =
+                metadata.render(&event, &state.install_id, &state.app, &state.install_props)
+            else {
+                log(self.options.debug, "drop event: unrenderable for this platform");
+                unsendable.push(event.id);
+                continue;
+            };
             let separator = if batch.ids.is_empty() { "" } else { "," };
             if batch.body.len() + rendered.len() + separator.len() + 2 > MAX_BYTES {
+                if batch.ids.is_empty() {
+                    log(self.options.debug, "drop event: exceeds MAX_BYTES alone");
+                    unsendable.push(event.id);
+                    continue;
+                }
                 break;
             }
             batch.body.push_str(separator);
             batch.body.push_str(&rendered);
             batch.ids.push(event.id);
             batch.install |= event.n == "install";
+        }
+        if !unsendable.is_empty() {
+            self.store.remove(&unsendable);
         }
         if batch.ids.is_empty() {
             return None;
@@ -898,5 +985,115 @@ mod tests {
             vec![event_id]
         );
         worker.cancel_request();
+    }
+
+    fn conformance_worker(dir: &std::path::Path) -> Worker {
+        let mut worker = Worker::new(Options {
+            dir: Some(dir.into()),
+            av: "release A".into(),
+            now: Some(BigInt::from(0)),
+            endpoint: "http://127.0.0.1:1/v1/e".into(),
+            debug: false,
+            version: None,
+            mock: None,
+        });
+        worker.initialize("prd_conform001".into(), None, None);
+        worker.store.queue.clear();
+        worker.store.bytes = 0;
+        worker
+    }
+
+    /// A queue entry can only ever reach this size if it slipped past
+    /// `valid_props` (e.g. a persisted record from before this cap existed);
+    /// `batch()` must retire it rather than wedge on it forever.
+    #[test]
+    fn one_oversized_event_cannot_block_every_later_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut worker = conformance_worker(dir.path());
+        let digits = "9".repeat(70_000);
+        let huge_props: Props = serde_json::from_str(&format!(r#"{{"n":{digits}}}"#)).unwrap();
+        let huge = worker.event("huge", &BigInt::from(0), huge_props, false);
+        let huge_id = huge.id.clone();
+        worker.store.append(huge);
+        worker.track("after", Props::new());
+        let after_id = serde_json::from_str::<Event>(&worker.store.queue[1])
+            .unwrap()
+            .id;
+
+        let batch = worker.batch(&BigInt::from(0), false).unwrap();
+        assert!(batch.body.len() <= MAX_BYTES);
+        assert_eq!(batch.ids, vec![after_id]);
+        assert!(worker
+            .store
+            .queue
+            .iter()
+            .all(|line| serde_json::from_str::<Event>(line).unwrap().id != huge_id));
+    }
+
+    /// An event whose attached (or, for legacy records, fallback) metadata is
+    /// invalid can never be rendered; `batch()` must retire it too instead of
+    /// blocking every later event behind it.
+    #[test]
+    fn unrenderable_event_is_dropped_without_blocking_later_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut worker = conformance_worker(dir.path());
+        let bogus = Metadata {
+            av: "release A".into(),
+            os: "offbrand",
+            osv: "1".into(),
+            arch: "arm64",
+            version: None,
+        };
+        let mut broken = worker.event("broken", &BigInt::from(0), Props::new(), false);
+        broken.metadata = Some(bogus.snapshot(&None));
+        let broken_id = broken.id.clone();
+        worker.store.append(broken);
+        worker.track("after", Props::new());
+        let after_id = serde_json::from_str::<Event>(&worker.store.queue[1])
+            .unwrap()
+            .id;
+
+        let batch = worker.batch(&BigInt::from(0), false).unwrap();
+        assert_eq!(batch.ids, vec![after_id]);
+        assert!(worker
+            .store
+            .queue
+            .iter()
+            .all(|line| serde_json::from_str::<Event>(line).unwrap().id != broken_id));
+    }
+
+    #[test]
+    fn supported_rejects_an_empty_os_or_architecture() {
+        assert!(supported(&Metadata {
+            av: "1.0.0".into(),
+            os: "linux",
+            osv: String::new(),
+            arch: "x64",
+            version: None,
+        }));
+        assert!(!supported(&Metadata {
+            av: "1.0.0".into(),
+            os: "",
+            osv: String::new(),
+            arch: "x64",
+            version: None,
+        }));
+        assert!(!supported(&Metadata {
+            av: "1.0.0".into(),
+            os: "linux",
+            osv: String::new(),
+            arch: "",
+            version: None,
+        }));
+    }
+
+    #[test]
+    fn valid_endpoint_rejects_userinfo_non_http_and_unparseable_urls() {
+        assert!(valid_endpoint("https://in.jelto.io/v1/e"));
+        assert!(valid_endpoint("http://127.0.0.1:8080/v1/e"));
+        assert!(!valid_endpoint("file:///dev/null"));
+        assert!(!valid_endpoint("https://u:p@example.com/v1/e"));
+        assert!(!valid_endpoint("not a url"));
+        assert!(!valid_endpoint(""));
     }
 }

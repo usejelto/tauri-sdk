@@ -1,5 +1,8 @@
 //! Jelto's Tauri 2 desktop SDK. Registration is inactive until explicit initialization.
-//! See the repository's `spec/tauri-sdk.md` and `docs/sdk/tauri.md`.
+//! See the README for the public API and the published setup guide at
+//! <https://jelto.io/docs/sdk/tauri.md>; the wire and behavioural contracts the plugin
+//! implements live in the public contracts repository (`spec/wire-v1.md`,
+//! `spec/sdk-conformance.md` at <https://github.com/usejelto/contracts>).
 mod engine;
 mod store;
 mod wire;

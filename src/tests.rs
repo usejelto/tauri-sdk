@@ -207,6 +207,14 @@ fn props(value: Value) -> Props {
     serde_json::from_value(value).unwrap()
 }
 
+#[test]
+fn valid_props_rejects_a_number_literal_over_200_chars_but_accepts_200() {
+    let over: Props = serde_json::from_str(&format!(r#"{{"n":{}}}"#, "9".repeat(201))).unwrap();
+    assert!(!valid_props(&over, false));
+    let at_cap: Props = serde_json::from_str(&format!(r#"{{"n":{}}}"#, "9".repeat(200))).unwrap();
+    assert!(valid_props(&at_cap, false));
+}
+
 struct Server {
     endpoint: String,
     requests: Arc<Mutex<Vec<String>>>,
@@ -505,6 +513,68 @@ async fn daily_utc_rollover_and_install_deadline_survive_restart() {
     second.disable().await;
 }
 
+#[tokio::test]
+async fn invalid_endpoints_leave_the_sdk_inactive_with_no_request_ever_sent() {
+    let server = Server::new(vec![]).await;
+    let dir = tempfile::tempdir().unwrap();
+    // Explicit overrides: an absolute http(s) URL with no userinfo is required;
+    // anything else (wrong scheme, embedded credentials, unparseable) drops init.
+    for invalid in ["file:///dev/null", "https://u:p@example.com/v1/e", "not a url"] {
+        let sdk = engine(dir.path(), &server.endpoint, "0");
+        sdk.init(KEY, None, Some(invalid)).await;
+        assert_eq!(sdk.install_id().await, "");
+        sdk.disable().await;
+    }
+    // A non-empty invalid JELTO_ENDPOINT (simulated via Options.endpoint, the
+    // field Options::environment fills from the env var) is validated the same
+    // way at initialize() time, with the same outcome.
+    let sdk = test_engine(Options {
+        dir: Some(dir.path().into()),
+        av: "2.3.4".into(),
+        now: whole("0"),
+        endpoint: "not a url".into(),
+        debug: false,
+        version: None,
+        mock: None,
+    });
+    sdk.init(KEY, None, None).await;
+    assert_eq!(sdk.install_id().await, "");
+    sdk.disable().await;
+    assert!(
+        server.requests.lock().unwrap().is_empty(),
+        "an invalid endpoint must never be reachable, explicit or from the environment"
+    );
+    // An empty override is absent: the next source (here, the options endpoint
+    // standing in for JELTO_ENDPOINT) applies and the SDK activates normally.
+    let sdk = engine(dir.path(), &server.endpoint, "0");
+    sdk.init(KEY, None, Some("")).await;
+    assert!(!sdk.install_id().await.is_empty());
+    sdk.advance(2001).await;
+    server.wait_requests(1).await;
+    sdk.disable().await;
+}
+
+#[tokio::test]
+async fn mock_header_containing_a_newline_is_omitted_but_delivery_still_succeeds() {
+    let server = Server::new(vec![]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let sdk = test_engine(Options {
+        dir: Some(dir.path().into()),
+        av: "2.3.4".into(),
+        now: whole("0"),
+        endpoint: server.endpoint.clone(),
+        debug: false,
+        version: None,
+        mock: Some("bad\nvalue".into()),
+    });
+    sdk.init(KEY, None, None).await;
+    sdk.advance(2001).await;
+    server.wait_requests(1).await;
+    assert_eq!(server.requests.lock().unwrap().len(), 1);
+    assert_eq!(sdk.export_state().await["backoff_step_ms"], 0);
+    sdk.disable().await;
+}
+
 #[test]
 fn exact_whole_number_response_grammar_and_retry_floors() {
     assert_eq!(
@@ -652,7 +722,10 @@ mod permissions {
             "tauri://localhost"
         };
         let commands = [
-            ("init", json!({"key":"invalid"})),
+            (
+                "init",
+                json!({"key":"invalid","endpoint":"https://example.com/v1/e"}),
+            ),
             ("track", json!({"name":"x"})),
             ("onboarding", json!({"step":"tour","status":"ok"})),
             ("set_props", json!({"props":{}})),
