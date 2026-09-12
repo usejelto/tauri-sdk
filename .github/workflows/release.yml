@@ -103,7 +103,7 @@ jobs:
         run: |
           dist_tag=latest
           if [[ "$RELEASE_TAG" == *-* ]]; then dist_tag=next; fi
-          npm publish release-artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$dist_tag" --registry https://registry.npmjs.org
+          npm publish ./release-artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$dist_tag" --registry https://registry.npmjs.org
       - name: Verify registry contents and installation
         run: |
           python3 vendor/release-tools/release.py wait
