@@ -1,11 +1,11 @@
 [package]
+repository = "https://github.com/usejelto/tauri-sdk"
 name = "tauri-plugin-jelto"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.94"
 description = "Privacy-preserving Jelto analytics for Tauri 2 desktop applications"
 license = "MIT"
-repository = "https://github.com/usejelto/tauri-sdk"
 links = "tauri-plugin-jelto"
 # Anchor file names to this package: unanchored README/LICENSE patterns also
 # include dependency and conformance-tool files beneath ignored directories.
