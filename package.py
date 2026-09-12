@@ -22,6 +22,16 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def deterministic_link_flags():
+    """MSVC stamps the wall clock and a per-link PDB signature into the PE header, so two
+    clean builds of identical sources never match. /Brepro derives both from the content,
+    and /PDBALTPATH keeps the scratch directory each build is given out of the image."""
+    host = subprocess.run([CARGO, "-vV"], capture_output=True, text=True, check=True).stdout
+    if "pc-windows-msvc" not in host:
+        return []
+    return ["-Clink-arg=/Brepro", "-Clink-arg=/PDBALTPATH:%_PDB%"]
+
+
 def main():
     crate_version = tomllib.loads((ROOT / 'Cargo.toml').read_text())['package']['version']
     npm_version = json.loads((ROOT / 'package.json').read_text())['version']
@@ -29,6 +39,7 @@ def main():
         raise SystemExit('Tauri Rust/npm versions must match')
     crate_name = f'tauri-plugin-jelto-{crate_version}.crate'
     npm_name = f'jelto-tauri-{npm_version}.tgz'
+    link_flags = deterministic_link_flags()
     outputs = []
     with tempfile.TemporaryDirectory(prefix="jelto-tauri-c19-") as scratch:
         for number in (1, 2):
@@ -45,7 +56,8 @@ def main():
                 (source / "node_modules").symlink_to(ROOT / "node_modules", target_is_directory=True)
             env = os.environ.copy()
             env["CARGO_TARGET_DIR"] = str(source / "target")
-            env["RUSTFLAGS"] = " ".join(filter(None, [env.get("RUSTFLAGS", ""), f"--remap-path-prefix={source}=/jelto-tauri"]))
+            env["RUSTFLAGS"] = " ".join(filter(None, [env.get("RUSTFLAGS", ""),
+                                                      f"--remap-path-prefix={source}=/jelto-tauri", *link_flags]))
             run([CARGO, "build", "--release", "--locked", "--no-default-features", "--features", "conformance", "--bin", "conformance-host"], source, env)
             # Shipping Rust artifact is a source crate; validate it through cargo package.
             run([CARGO, "package", "--allow-dirty", "--locked", "--no-verify"], source, env)
