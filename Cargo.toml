@@ -1,7 +1,7 @@
 [package]
 repository = "https://github.com/usejelto/tauri-sdk"
 name = "tauri-plugin-jelto"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 rust-version = "1.94"
 description = "Privacy-preserving Jelto analytics for Tauri 2 desktop applications"
