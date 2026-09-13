@@ -1,11 +1,17 @@
 # Jelto for Tauri 2
 
 Rust plugin `tauri-plugin-jelto` and TypeScript bindings `@jelto/tauri` for macOS,
-Windows and Linux. Version 1.0.0 is prepared for release; use local packages until
-registry publication. See [the integration guide](https://jelto.io/docs/sdk/tauri) and
+Windows and Linux. `@jelto/tauri` is published on npm and `tauri-plugin-jelto` on
+crates.io. See [the integration guide](https://jelto.io/docs/sdk/tauri) and
 [the runnable example](https://github.com/usejelto/tauri-sdk/blob/main/example/README.md).
 
-For local installation, run `npm ci` and `make package` from this component's
+```sh
+npm install @jelto/tauri
+cd src-tauri
+cargo add tauri-plugin-jelto
+```
+
+To build local packages instead, run `npm ci` and `make package` from this component's
 source root. The installable npm and Rust packages are written to `artifacts/`;
 `make example` prepares and builds a desktop app using the local plugin. See the
 example README for its prerequisites and setup commands.
@@ -81,8 +87,7 @@ Questions, bug reports and documentation improvements are welcome. See
 [Contributing](https://github.com/usejelto/tauri-sdk/blob/main/CONTRIBUTING.md),
 [Code of Conduct](https://github.com/usejelto/tauri-sdk/blob/main/CODE_OF_CONDUCT.md), and
 [Security policy](https://github.com/usejelto/tauri-sdk/blob/main/SECURITY.md).
-Until the public repository is available, these files are also included in the
-source root; contact [taha@jelto.io](mailto:taha@jelto.io) for help.
+Contact [taha@jelto.io](mailto:taha@jelto.io) for anything else.
 
 Jelto-owned software and associated documentation use the [MIT license](LICENSE).
 Third-party materials retain their own terms, including the Contributor Covenant
