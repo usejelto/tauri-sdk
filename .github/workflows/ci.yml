@@ -69,18 +69,32 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev patchelf xvfb
       - name: Pinned Rust toolchain
         run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # The plugin and the native example are separate Cargo workspaces
+          # with their own lockfiles; both registries and target directories
+          # are keyed on them and on the pinned toolchain.
+          workspaces: |
+            . -> target
+            example/src-tauri -> target
+          # Compiled dependencies are worth keeping even when a check fails.
+          cache-on-failure: true
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          # A prebuilt, checksum-verified binary; compiling cargo-audit from
+          # source cost three minutes on every run.
+          tool: cargo-audit@0.22.2
       - name: Cargo dependency vulnerability check
         if: runner.os == 'Linux'
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit
+        run: cargo audit
       - name: Component tests and packages
         run: make test build package
       - name: Conformance twice
         if: inputs.release || inputs.conformance
-        run: |
-          make conformance JELTO_CONTRACTS_DIR="$GITHUB_WORKSPACE/.contracts"
-          make conformance JELTO_CONTRACTS_DIR="$GITHUB_WORKSPACE/.contracts"
+        # Both passes run concurrently in the Makefile: each runner has its own
+        # mockd and state directories, so the gate costs one pass's wall time.
+        run: make conformance-twice JELTO_CONTRACTS_DIR="$GITHUB_WORKSPACE/.contracts"
       - name: Native example
         run: |
           make example

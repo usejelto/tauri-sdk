@@ -39,8 +39,7 @@ sibling checkout implicitly.
 ```sh
 npm ci
 make test
-make conformance
-make conformance
+make conformance-twice
 make package
 make example
 ```
