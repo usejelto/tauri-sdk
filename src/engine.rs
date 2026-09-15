@@ -505,8 +505,7 @@ impl Worker {
         self.store.state.key = key;
         self.store.state.app = app;
         self.store.state.install_id = uuid::Uuid::new_v4().to_string();
-        self.store.state.install_due_at =
-            (&now + BigInt::from(rand::random_range(0..=INSTALL_DELAY))).to_string();
+        self.store.state.install_due_at = now.to_string();
         self.init_flush = Some(&now + 2000);
         self.track_flush = None;
         self.pending = false;
@@ -620,7 +619,10 @@ impl Worker {
             self.store
                 .append(self.event("install", now, Props::new(), false));
             self.store.checkpoint();
-            self.pending = true;
+            // Queue immediately while preserving the two-second initial flush (C7).
+            if self.init_flush.is_none() {
+                self.pending = true;
+            }
         }
         if self.request.is_some() {
             return;

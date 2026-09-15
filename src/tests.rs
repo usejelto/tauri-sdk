@@ -110,7 +110,7 @@ async fn offline_same_day_updates_downgrades_and_retries_preserve_each_transitio
     let dir = tempfile::tempdir().unwrap();
     let sdk = versioned_engine(dir.path(), &first_server.endpoint, "0", " release A+one ");
     sdk.init(KEY, Some("desktop"), None).await;
-    sdk.advance(INSTALL_DELAY + 1).await;
+    sdk.advance(3000).await;
     let id = sdk.install_id().await;
     let installed = sdk.export_state().await;
     assert_eq!(installed["install_claimed"], true);
@@ -309,6 +309,16 @@ async fn inert_registration_restart_properties_reset_and_disable() {
     sdk.set_props(props(json!({"license":"paid","invalid":"X@Y", "number":1})))
         .await;
     let due = initial["install_due_at"].clone();
+    assert_eq!(due, "0");
+    assert_eq!(
+        initial["queue"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["n"] == "install")
+            .count(),
+        1
+    );
     drop(sdk); // no orderly termination callback
     let second = engine(dir.path(), "http://127.0.0.1:1", "1000");
     second.init(KEY, Some("desktop"), None).await;
@@ -322,7 +332,14 @@ async fn inert_registration_restart_properties_reset_and_disable() {
     second.reset().await;
     assert_ne!(second.install_id().await, id);
     let state = second.export_state().await;
-    assert_eq!(state["queue"]["events"].as_array().unwrap().len(), 1);
+    assert_eq!(state["install_due_at"], "1000");
+    let names = state["queue"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["n"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["heartbeat", "install"]);
     assert_eq!(state["install_props"], json!({"license":"paid"}));
     second.disable().await;
     assert!(!dir.path().exists());
@@ -362,7 +379,7 @@ async fn queue_caps_oldest_first_and_corrupt_or_unavailable_storage() {
     assert!(!sdk.install_id().await.is_empty());
     sdk.track("memory", None).await;
     assert_eq!(
-        sdk.export_state().await["queue"]["events"][1]["n"],
+        sdk.export_state().await["queue"]["events"][2]["n"],
         "memory"
     );
     sdk.disable().await;
@@ -495,9 +512,10 @@ async fn daily_utc_rollover_and_install_deadline_survive_restart() {
     let sdk = engine(dir.path(), &server.endpoint, "-1");
     sdk.init(KEY, None, None).await;
     assert_eq!(sdk.export_state().await["last_heartbeat_day"], "-1");
+    assert_eq!(sdk.export_state().await["install_due_at"], "-1");
     sdk.advance(1).await;
     assert_eq!(sdk.export_state().await["last_heartbeat_day"], "0");
-    sdk.advance(INSTALL_DELAY + 1).await;
+    sdk.advance(3000).await;
     assert_eq!(sdk.export_state().await["install_claimed"], true);
     let events = server
         .bodies()
@@ -509,6 +527,8 @@ async fn daily_utc_rollover_and_install_deadline_survive_restart() {
     let second = engine(dir.path(), &server.endpoint, "21600002");
     second.init(KEY, None, None).await;
     second.advance(3000).await;
+    assert_eq!(second.export_state().await["install_due_at"], "-1");
+    assert_eq!(second.export_state().await["install_claimed"], true);
     assert_eq!(second.export_state().await["queue"]["bytes"], 0);
     second.disable().await;
 }

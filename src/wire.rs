@@ -9,7 +9,6 @@ pub const QUEUE_BYTES: usize = 1_048_576;
 pub const QUEUE_EVENTS: usize = 1_000;
 pub const DAY: u64 = 86_400_000;
 pub const CLAIM_AFTER: u64 = 30 * DAY;
-pub const INSTALL_DELAY: u64 = 6 * 60 * 60 * 1_000;
 pub const BACKOFF_MAX: u64 = 3_600_000;
 
 /// JSON scalar properties. Install properties accept only wire §4's string grammar.
