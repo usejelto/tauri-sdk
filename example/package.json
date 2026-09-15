@@ -1,6 +1,6 @@
 {
   "name": "jelto-tauri-example", "version": "1.0.0", "private": true, "type": "module",
   "scripts": { "dev": "vite --host 127.0.0.1 --port 1420 --strictPort", "build": "vite build", "tauri": "tauri" },
-  "dependencies": { "@jelto/tauri": "file:../jelto-tauri-1.0.2.tgz", "@tauri-apps/api": "^2.0.0" },
+  "dependencies": { "@jelto/tauri": "file:../jelto-tauri-1.1.0.tgz", "@tauri-apps/api": "^2.0.0" },
   "devDependencies": { "@tauri-apps/cli": "^2.0.0", "typescript": "5.9.3", "vite": "^6.4.2" }
 }

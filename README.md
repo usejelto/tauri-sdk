@@ -83,7 +83,7 @@ example on macOS, Windows and Linux; headless conformance does not certify UI
 runtime integration by itself.
 
 Run development commands from this SDK directory. Set `JELTO_CONTRACTS_DIR` to
-an extracted Jelto contracts **0.1.0** archive before running conformance. The
+an extracted Jelto contracts **0.1.5** archive before running conformance. The
 standalone Makefile owns Rust, TypeScript, packaging and host build commands.
 
 ## Repository CI and releases

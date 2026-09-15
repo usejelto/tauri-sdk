@@ -1,6 +1,6 @@
 {
   "name": "@jelto/tauri",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Jelto analytics bindings for the Tauri 2 desktop plugin",
   "repository": {
     "type": "git",
