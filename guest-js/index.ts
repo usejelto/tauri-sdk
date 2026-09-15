@@ -1,14 +1,15 @@
 import { invoke } from '@tauri-apps/api/core'
 
 export type Props = Record<string, string | number | boolean>
+export type InstallOrigin = 'new' | 'existing' | 'unknown'
 
 async function call(command: string, args?: Record<string, unknown>): Promise<void> {
   try { await invoke(`plugin:jelto|${command}`, args) } catch { /* Telemetry never rejects into the application. */ }
 }
 
 /** Register the Rust plugin and grant local capabilities before initializing after consent. */
-async function init(key: string, app?: string, endpoint?: string): Promise<void> {
-  await call('init', { key, app, endpoint })
+async function init(key: string, app?: string, endpoint?: string, installOrigin?: InstallOrigin): Promise<void> {
+  await call('init', { key, app, endpoint, ...(installOrigin === undefined ? {} : { installOrigin }) })
 }
 async function track(name: string, props?: Props): Promise<void> { await call('track', { name, props }) }
 async function onboarding(step: string, status: 'ok' | 'fail' | 'skip', reason?: string): Promise<void> {

@@ -8,7 +8,7 @@ mod store;
 mod wire;
 
 pub use engine::Jelto;
-pub use wire::{PropValue, Props};
+pub use wire::{InstallOrigin, PropValue, Props};
 
 #[cfg(feature = "tauri")]
 mod adapter;

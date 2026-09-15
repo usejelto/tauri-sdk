@@ -1,4 +1,4 @@
-use crate::wire::{log, whole, Batch, Event, QUEUE_BYTES, QUEUE_EVENTS};
+use crate::wire::{log, whole, Batch, Event, InstallOrigin, QUEUE_BYTES, QUEUE_EVENTS};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -16,6 +16,9 @@ pub(crate) struct State {
     pub last_heartbeat_day: String,
     pub last_app_version: String,
     pub install_claimed: bool,
+    /// None is legacy unknown, never upgraded using a later host hint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_origin: Option<InstallOrigin>,
     pub install_due_at: String,
     pub install_first_try: String,
     pub install_props: BTreeMap<String, String>,

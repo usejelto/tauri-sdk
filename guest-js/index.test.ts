@@ -6,6 +6,12 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 afterEach(() => vi.resetAllMocks())
 
 describe('Tauri IPC bindings', () => {
+  it('passes optional install origin to initialization without exposing it as a heartbeat property', async () => {
+    await jelto.init('prd_conform001', 'desktop', undefined, 'existing')
+    expect(invoke).toHaveBeenLastCalledWith('plugin:jelto|init', {
+      key: 'prd_conform001', app: 'desktop', endpoint: undefined, installOrigin: 'existing',
+    })
+  })
   it('routes all seven operations and scalar props to the shared plugin', async () => {
     vi.mocked(invoke).mockResolvedValue('identity')
     await jelto.init('prd_conform001', 'desktop', 'http://localhost:8080/v1/e')

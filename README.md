@@ -26,6 +26,21 @@ await jelto.init('prd_conform001', 'desktop', 'http://127.0.0.1:8398/v1/e')
 await jelto.track('export', { format: 'pdf' })
 ```
 
+For an app with existing users, pass optional `installOrigin` as the fourth
+argument: `await jelto.init(key, 'desktop', undefined, 'existing')`.
+It accepts `'new'`, `'existing'`, or `'unknown'` (default). Inspect the app's saved
+first-launch or onboarding state before overwriting it; an incomplete onboarding
+flag alone cannot establish `new`. Only this coarse value is sent, never a date.
+Rust callers can use
+`sdk.init_with_origin(key, None, None, tauri_plugin_jelto::InstallOrigin::Existing).await`;
+the existing `init` method defaults to unknown.
+
+The initial claim persists the classification, sends it only on `install` as
+`props.install_origin`, and retains it across retries and launches regardless of
+later init arguments. Legacy claims remain unknown. `setProps` cannot set this
+reserved property. Reset creates an unknown claim; disable followed by init captures
+the new explicit hint. See [adopting Jelto with existing users](https://jelto.io/docs/start/existing-app).
+
 Seven asynchronous operations: `init`, `track`, `onboarding`, `setProps`,
 `installId`, `reset`, `disable`. Rust exposes the same methods in snake_case
 through `JeltoExt::jelto()`. Calls fail softly; identity reads return an empty

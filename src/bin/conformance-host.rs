@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, Write},
     time::Instant,
 };
-use tauri_plugin_jelto::{Jelto, Props};
+use tauri_plugin_jelto::{InstallOrigin, Jelto, Props};
 
 // Only command parsing and result encoding live here. Timers, state, validation,
 // network delivery and the virtual clock are the shipping engine's implementation.
@@ -50,8 +50,17 @@ async fn dispatch(sdk: &Jelto, args: &[String]) -> Result<Value, &'static str> {
     let mut reply = json!({"cmd":cmd,"ok":true});
     match cmd {
         "init" => {
-            sdk.init(arg(1).ok_or("init <key> [app]")?, arg(2), None)
-                .await
+            sdk.init_with_origin(
+                arg(1).ok_or("init <key> [app]")?,
+                arg(2),
+                None,
+                InstallOrigin::from(
+                    std::env::var("JELTO_INSTALL_ORIGIN")
+                        .unwrap_or_default()
+                        .as_str(),
+                ),
+            )
+            .await
         }
         "track" => {
             let props = arg(2)

@@ -21,6 +21,35 @@ pub enum PropValue {
 }
 pub type Props = BTreeMap<String, PropValue>;
 
+/// Host knowledge when the first claim is created; no timestamp is transmitted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InstallOrigin {
+    New,
+    Existing,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+impl InstallOrigin {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::New => "new",
+            Self::Existing => "existing",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+impl From<&str> for InstallOrigin {
+    fn from(value: &str) -> Self {
+        match value {
+            "new" => Self::New,
+            "existing" => Self::Existing,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 pub(crate) fn log(debug: bool, message: &str) {
     if debug {
         // Never format transport errors: those can include an endpoint's IP address.
@@ -237,8 +266,12 @@ impl Metadata {
             value["v"] = json!(version);
         }
         if event.hb {
-            if !props.is_empty() {
-                value["props"] = json!(props);
+            let current: BTreeMap<_, _> = props
+                .iter()
+                .filter(|(key, _)| key.as_str() != "install_origin")
+                .collect();
+            if !current.is_empty() {
+                value["props"] = json!(current);
             }
         } else if !event.props.is_empty() {
             value["props"] = json!(event.props);

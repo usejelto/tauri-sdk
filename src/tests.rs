@@ -17,6 +17,207 @@ use tokio::{
 };
 
 const KEY: &str = "prd_conform001";
+
+#[test]
+fn legacy_heartbeat_properties_cannot_leak_install_origin() {
+    let saved = BTreeMap::from([
+        ("license".into(), "paid".into()),
+        ("install_origin".into(), "existing".into()),
+    ]);
+    let event = Event::new("heartbeat", &BigInt::from(0), Props::new(), true);
+    let metadata = Metadata::detect("1.0.0", None);
+    let rendered: Value =
+        serde_json::from_str(&metadata.render(&event, "id", &None, &saved).unwrap()).unwrap();
+    assert_eq!(rendered["props"], json!({"license":"paid"}));
+    assert_eq!(saved["install_origin"], "existing");
+}
+
+#[tokio::test]
+async fn manual_track_rejects_reserved_origin_outside_install_or_invalid_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let sdk = engine(dir.path(), "http://127.0.0.1:1/v1/e", "0");
+    sdk.init(KEY, None, None).await;
+    let before = sdk.export_state().await["queue"]["events"]
+        .as_array()
+        .unwrap()
+        .len();
+    for origin in [json!("new"), json!("existing"), json!("unknown")] {
+        sdk.track("custom", Some(props(json!({"install_origin":origin}))))
+            .await;
+        sdk.track("heartbeat", Some(props(json!({"install_origin":origin}))))
+            .await;
+    }
+    for origin in [
+        json!(""),
+        json!("New"),
+        json!("2020-01-01"),
+        json!(false),
+        json!(42),
+    ] {
+        sdk.track("install", Some(props(json!({"install_origin":origin}))))
+            .await;
+    }
+    assert_eq!(
+        sdk.export_state().await["queue"]["events"]
+            .as_array()
+            .unwrap()
+            .len(),
+        before
+    );
+    for origin in ["new", "existing", "unknown"] {
+        sdk.track("install", Some(props(json!({"install_origin":origin}))))
+            .await;
+    }
+    assert_eq!(
+        sdk.export_state().await["queue"]["events"]
+            .as_array()
+            .unwrap()
+            .len(),
+        before + 3
+    );
+    sdk.disable().await;
+}
+
+#[tokio::test]
+async fn install_origin_is_claim_only_and_defaults_to_unknown() {
+    for origin in [
+        None,
+        Some(InstallOrigin::New),
+        Some(InstallOrigin::Existing),
+        Some(InstallOrigin::Unknown),
+    ] {
+        let server = Server::new(vec![]).await;
+        let dir = tempfile::tempdir().unwrap();
+        let sdk = engine(dir.path(), &server.endpoint, "0");
+        if let Some(origin) = origin {
+            sdk.init_with_origin(KEY, None, None, origin).await;
+        } else {
+            sdk.init(KEY, None, None).await;
+        }
+        sdk.set_props(props(json!({"license":"paid", "install_origin":"new"})))
+            .await;
+        sdk.advance(3000).await;
+        let state = sdk.export_state().await;
+        let expected = origin.unwrap_or_default().as_str();
+        assert_eq!(state["install_origin"], expected);
+        let events: Vec<Value> = server
+            .bodies()
+            .into_iter()
+            .flat_map(|b| b["e"].as_array().unwrap().clone())
+            .collect();
+        assert_eq!(
+            events.iter().find(|e| e["n"] == "install").unwrap()["props"],
+            json!({"install_origin":expected})
+        );
+        assert_eq!(
+            events.iter().find(|e| e["n"] == "heartbeat").unwrap()["props"],
+            json!({"license":"paid"})
+        );
+        sdk.disable().await;
+    }
+}
+
+#[tokio::test]
+async fn install_origin_retry_and_identity_are_frozen_across_relaunch() {
+    let server = Server::new(vec![(503, "Retry-After: 10\r\n", "{}", 0)]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let sdk = engine(dir.path(), &server.endpoint, "0");
+    sdk.init_with_origin(KEY, None, None, InstallOrigin::Existing)
+        .await;
+    sdk.advance(3000).await;
+    let original = server.requests.lock().unwrap()[0].clone();
+    let id = sdk.install_id().await;
+    sdk.stop().await;
+    let next = engine(dir.path(), &server.endpoint, "3000");
+    next.init_with_origin(KEY, None, None, InstallOrigin::New)
+        .await;
+    assert_eq!(next.install_id().await, id);
+    assert_eq!(next.export_state().await["install_origin"], "existing");
+    next.advance(15000).await;
+    assert_eq!(server.requests.lock().unwrap().last().unwrap(), &original);
+    assert_eq!(next.export_state().await["install_claimed"], true);
+    next.init_with_origin(KEY, None, None, InstallOrigin::New)
+        .await;
+    assert_eq!(next.export_state().await["install_origin"], "existing");
+    next.disable().await;
+}
+
+#[tokio::test]
+async fn legacy_pending_install_omission_never_takes_a_new_host_hint() {
+    for queued in [false, true] {
+        let server = Server::new(vec![]).await;
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = crate::store::Store::new(Some(dir.path().into()), false);
+        store.state.key = KEY.into();
+        store.state.install_id = uuid::Uuid::new_v4().to_string();
+        store.state.install_due_at = "0".into();
+        if queued {
+            store.append(Event::new("install", &BigInt::from(0), Props::new(), false));
+        }
+        assert!(store.checkpoint());
+        drop(store);
+        let sdk = engine(dir.path(), &server.endpoint, "0");
+        sdk.init_with_origin(KEY, None, None, InstallOrigin::New)
+            .await;
+        sdk.advance(3000).await;
+        assert!(sdk.export_state().await.get("install_origin").is_none());
+        let events: Vec<Value> = server
+            .bodies()
+            .into_iter()
+            .flat_map(|b| b["e"].as_array().unwrap().clone())
+            .collect();
+        assert_eq!(events.iter().filter(|e| e["n"] == "install").count(), 1);
+        assert!(events
+            .iter()
+            .find(|e| e["n"] == "install")
+            .unwrap()
+            .get("props")
+            .is_none());
+        sdk.disable().await;
+    }
+}
+
+#[tokio::test]
+async fn reset_origin_is_unknown_and_disable_reinit_accepts_a_fresh_hint() {
+    let server = Server::new(vec![]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let sdk = engine(dir.path(), &server.endpoint, "0");
+    sdk.init_with_origin(KEY, None, None, InstallOrigin::Existing)
+        .await;
+    let previous = sdk.install_id().await;
+    sdk.reset().await;
+    assert_ne!(sdk.install_id().await, previous);
+    assert_eq!(sdk.export_state().await["install_origin"], "unknown");
+    sdk.advance(3000).await;
+    let events: Vec<Value> = server
+        .bodies()
+        .into_iter()
+        .flat_map(|b| b["e"].as_array().unwrap().clone())
+        .collect();
+    assert_eq!(events.iter().filter(|e| e["n"] == "install").count(), 1);
+    assert_eq!(
+        events.iter().find(|e| e["n"] == "install").unwrap()["props"],
+        json!({"install_origin":"unknown"})
+    );
+    sdk.disable().await;
+    sdk.init_with_origin(KEY, None, None, InstallOrigin::New)
+        .await;
+    sdk.advance(3000).await;
+    let events: Vec<Value> = server
+        .bodies()
+        .into_iter()
+        .flat_map(|b| b["e"].as_array().unwrap().clone())
+        .collect();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e["n"] == "install")
+            .last()
+            .unwrap()["props"],
+        json!({"install_origin":"new"})
+    );
+    sdk.disable().await;
+}
 fn engine(dir: &Path, endpoint: &str, pin: &str) -> Jelto {
     versioned_engine(dir, endpoint, pin, "2.3.4")
 }
@@ -539,7 +740,11 @@ async fn invalid_endpoints_leave_the_sdk_inactive_with_no_request_ever_sent() {
     let dir = tempfile::tempdir().unwrap();
     // Explicit overrides: an absolute http(s) URL with no userinfo is required;
     // anything else (wrong scheme, embedded credentials, unparseable) drops init.
-    for invalid in ["file:///dev/null", "https://u:p@example.com/v1/e", "not a url"] {
+    for invalid in [
+        "file:///dev/null",
+        "https://u:p@example.com/v1/e",
+        "not a url",
+    ] {
         let sdk = engine(dir.path(), &server.endpoint, "0");
         sdk.init(KEY, None, Some(invalid)).await;
         assert_eq!(sdk.install_id().await, "");

@@ -1,4 +1,4 @@
-use crate::{Jelto, Props};
+use crate::{InstallOrigin, Jelto, Props};
 use tauri::{
     plugin::{Builder, TauriPlugin},
     Manager, Runtime, State,
@@ -23,8 +23,15 @@ mod commands {
         key: String,
         app: Option<String>,
         endpoint: Option<String>,
+        install_origin: Option<InstallOrigin>,
     ) -> Result<(), ()> {
-        sdk.init(&key, app.as_deref(), endpoint.as_deref()).await;
+        sdk.init_with_origin(
+            &key,
+            app.as_deref(),
+            endpoint.as_deref(),
+            install_origin.unwrap_or_default(),
+        )
+        .await;
         Ok(())
     }
     #[tauri::command]

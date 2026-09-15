@@ -13,7 +13,7 @@ use tokio::{
 
 type Reply = oneshot::Sender<serde_json::Value>;
 enum Command {
-    Init(String, Option<String>, Option<String>),
+    Init(String, Option<String>, Option<String>, InstallOrigin),
     Track(String, Props),
     Onboarding(String, String, Option<String>),
     SetProps(Props),
@@ -80,6 +80,17 @@ impl Jelto {
     /// Start once after consent. Explicit endpoint > JELTO_ENDPOINT > production.
     /// Returns after scheduling initialization; it does not wait for disk or HTTP.
     pub async fn init(&self, key: &str, app: Option<&str>, endpoint: Option<&str>) {
+        self.init_with_origin(key, app, endpoint, InstallOrigin::Unknown)
+            .await;
+    }
+    /// Supply pre-existing host knowledge once. Later launches cannot reclassify a claim.
+    pub async fn init_with_origin(
+        &self,
+        key: &str,
+        app: Option<&str>,
+        endpoint: Option<&str>,
+        install_origin: InstallOrigin,
+    ) {
         let _ = self
             .sender
             .send((
@@ -87,6 +98,7 @@ impl Jelto {
                     key.into(),
                     app.map(str::to_owned),
                     endpoint.map(str::to_owned),
+                    install_origin,
                 ),
                 None,
             ))
@@ -325,7 +337,9 @@ impl Worker {
     async fn command(&mut self, command: Command, reply: Option<Reply>) -> bool {
         let mut result = serde_json::Value::Null;
         match command {
-            Command::Init(key, app, endpoint) => self.initialize(key, app, endpoint),
+            Command::Init(key, app, endpoint, origin) => {
+                self.initialize(key, app, endpoint, origin)
+            }
             Command::Track(name, props) if self.active => self.track(&name, props),
             Command::Onboarding(step, status, reason) if self.active => {
                 if !grammar(&step, 1, 32, "_-") {
@@ -360,7 +374,7 @@ impl Worker {
                 let props = self.store.state.install_props.clone();
                 self.store.clear();
                 self.store.state.install_props = props;
-                self.fresh_identity(key, app);
+                self.fresh_identity(key, app, InstallOrigin::Unknown);
             }
             Command::Disable => {
                 self.cancel_request();
@@ -438,7 +452,13 @@ impl Worker {
         }
         true
     }
-    fn initialize(&mut self, key: String, app: Option<String>, endpoint: Option<String>) {
+    fn initialize(
+        &mut self,
+        key: String,
+        app: Option<String>,
+        endpoint: Option<String>,
+        origin: InstallOrigin,
+    ) {
         if self.active {
             log(self.options.debug, "init ignored: already initialized");
             return;
@@ -478,7 +498,10 @@ impl Worker {
             client_version(self.options.version.clone(), self.options.debug),
         );
         if !supported(&metadata) {
-            log(self.options.debug, "drop init: unsupported desktop platform");
+            log(
+                self.options.debug,
+                "drop init: unsupported desktop platform",
+            );
             return;
         }
         self.endpoint = endpoint;
@@ -490,7 +513,7 @@ impl Worker {
             self.store.clear();
         }
         if self.store.state.install_id.is_empty() {
-            self.fresh_identity(key, app);
+            self.fresh_identity(key, app, origin);
         } else {
             self.init_flush = Some(self.now() + 2000);
             self.pending = false; // relaunch flush starts at 2 s, still respecting persisted backoff
@@ -499,12 +522,13 @@ impl Worker {
             self.store.checkpoint();
         }
     }
-    fn fresh_identity(&mut self, key: String, app: Option<String>) {
+    fn fresh_identity(&mut self, key: String, app: Option<String>, origin: InstallOrigin) {
         let now = self.now();
         self.install_enqueued = false;
         self.store.state.key = key;
         self.store.state.app = app;
         self.store.state.install_id = uuid::Uuid::new_v4().to_string();
+        self.store.state.install_origin = Some(origin);
         self.store.state.install_due_at = now.to_string();
         self.init_flush = Some(&now + 2000);
         self.track_flush = None;
@@ -555,6 +579,12 @@ impl Worker {
             );
             return;
         }
+        if props.get("install_origin").is_some_and(|origin| {
+            name != "install" || !matches!(origin, PropValue::String(value) if matches!(value.as_str(), "new" | "existing" | "unknown"))
+        }) {
+            log(self.options.debug, "drop event: install_origin is reserved for install and must be new, existing or unknown");
+            return;
+        }
         if !valid_props(&props, self.options.debug) {
             return;
         }
@@ -565,6 +595,13 @@ impl Worker {
     fn set_props(&mut self, props: Props) {
         let mut merged = self.store.state.install_props.clone();
         for (key, value) in props {
+            if key == "install_origin" {
+                log(
+                    self.options.debug,
+                    "drop install_origin: reserved for claim initialization",
+                );
+                continue;
+            }
             if !grammar(&key, 1, 32, "_") {
                 log(
                     self.options.debug,
@@ -616,8 +653,18 @@ impl Worker {
                 self.store.state.install_first_try = now.to_string();
             }
             self.install_enqueued = true;
-            self.store
-                .append(self.event("install", now, Props::new(), false));
+            let props = self
+                .store
+                .state
+                .install_origin
+                .map(|origin| {
+                    Props::from([(
+                        "install_origin".into(),
+                        PropValue::String(origin.as_str().into()),
+                    )])
+                })
+                .unwrap_or_default();
+            self.store.append(self.event("install", now, props, false));
             self.store.checkpoint();
             // Queue immediately while preserving the two-second initial flush (C7).
             if self.init_flush.is_none() {
@@ -749,7 +796,10 @@ impl Worker {
             let Some(rendered) =
                 metadata.render(&event, &state.install_id, &state.app, &state.install_props)
             else {
-                log(self.options.debug, "drop event: unrenderable for this platform");
+                log(
+                    self.options.debug,
+                    "drop event: unrenderable for this platform",
+                );
                 unsendable.push(event.id);
                 continue;
             };
@@ -896,7 +946,7 @@ mod tests {
             version: None,
             mock: None,
         });
-        worker.initialize("prd_conform001".into(), None, None);
+        worker.initialize("prd_conform001".into(), None, None, InstallOrigin::Unknown);
         worker.store.queue.clear();
         worker.store.bytes = 0;
         worker.options.av = "release B".into();
@@ -956,7 +1006,7 @@ mod tests {
             version: None,
             mock: None,
         });
-        worker.initialize("prd_conform001".into(), None, None);
+        worker.initialize("prd_conform001".into(), None, None, InstallOrigin::Unknown);
         worker.store.state.install_claimed = true;
         worker.store.queue.clear();
         worker.store.bytes = 0;
@@ -999,7 +1049,7 @@ mod tests {
             version: None,
             mock: None,
         });
-        worker.initialize("prd_conform001".into(), None, None);
+        worker.initialize("prd_conform001".into(), None, None, InstallOrigin::Unknown);
         worker.store.queue.clear();
         worker.store.bytes = 0;
         worker
