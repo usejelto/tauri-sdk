@@ -22,17 +22,28 @@ window's capability, and initialize only after the app's consent decision:
 ```ts
 import jelto from '@jelto/tauri'
 
-await jelto.init('prd_conform001', 'desktop', 'http://127.0.0.1:8398/v1/e')
+await jelto.init('YOUR_PRODUCT_ID', 'desktop', undefined, 'new')
 await jelto.track('export', { format: 'pdf' })
 ```
 
-For an app with existing users, pass optional `installOrigin` as the fourth
-argument: `await jelto.init(key, 'desktop', undefined, 'existing')`.
-It accepts `'new'`, `'existing'`, or `'unknown'` (default). Inspect the app's saved
-first-launch or onboarding state before overwriting it; an incomplete onboarding
-flag alone cannot establish `new`. Only this coarse value is sent, never a date.
-Rust callers can use
-`sdk.init_with_origin(key, None, None, tauri_plugin_jelto::InstallOrigin::Existing).await`;
+The fourth argument, `'new'`, is for an app that had no users before Jelto;
+otherwise see the [existing-app guide](https://jelto.io/docs/start/existing-app).
+
+Replace `YOUR_PRODUCT_ID` with your product ID (for example `prd_8f3kq2m9x1`) and
+`desktop` with your app slug registered under **Settings → Installation → Apps**.
+The optional third argument overrides the endpoint; `undefined` uses the default.
+
+For an app with existing users, derive the fourth argument for each installation
+from the app's saved first-launch or onboarding state, inspected before
+overwriting it: `'existing'` when that state shows the installation predates
+Jelto, `'new'` only when the host knows this is the installation's first launch
+(an incomplete onboarding flag alone cannot establish it), and `'unknown'` when
+unsure. Omitting it also sends unknown. Never hardcode one value for every
+installation of an existing app. Retention, onboarding and license-conversion
+reports count only installations marked `new`. Only this coarse value is sent,
+never a date. Rust callers can use
+`sdk.init_with_origin(key, None, None, origin).await` with a
+`tauri_plugin_jelto::InstallOrigin` (`New`, `Existing` or `Unknown`);
 the existing `init` method defaults to unknown.
 
 The initial claim persists the classification, sends it only on `install` as
@@ -64,6 +75,14 @@ overrides the default `https://in.jelto.io/v1/e`; an explicit endpoint wins.
 `JELTO_CLIENT_VERSION` and `JELTO_MOCK` are conformance overrides; leave them unset
 in shipped apps. Storage failure falls back to memory; identity then cannot be
 guaranteed across launches. Exit flushing is best effort and does not delay exit.
+
+## Verify it works
+
+1. Start the app with `JELTO_DEBUG=1` in its environment (for example `JELTO_DEBUG=1 npm run tauri dev`); payloads and diagnostics print to stderr. Leave it unset in shipped builds.
+2. Let the app call `init` after its consent decision and keep it open for about 10 seconds.
+3. In the Jelto dashboard, open **Settings → Installation → Apps**; your app shows **Receiving app activity**.
+
+## Development and conformance
 
 From the repository root:
 

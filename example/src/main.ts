@@ -14,7 +14,7 @@ document.getElementById('enable')!.onclick = async () => {
   const identity = await jelto.installId()
   enabled(identity !== '')
   await showIdentity()
-  status(identity ? 'Analytics enabled. A heartbeat is queued.' : 'Initialization unavailable. Check the key, plugin and capability.')
+  status(identity ? 'Analytics enabled. A heartbeat is queued.' : 'Initialization unavailable. Check the product ID, plugin and capability.')
 }
 document.getElementById('track')!.onclick = async () => { await jelto.track('export', { format: 'pdf' }); status('Export event queued.') }
 document.getElementById('onboarding')!.onclick = async () => { await jelto.onboarding('tour', 'ok'); status('Onboarding completion queued.') }
