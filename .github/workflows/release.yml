@@ -129,7 +129,7 @@ jobs:
           cargo publish --dry-run --locked
           cargo package --locked
           cmp target/package/*.crate release-artifacts/*.crate
-      - uses: rust-lang/crates-io-auth-action@v1
+      - uses: rust-lang/crates-io-auth-action@v1.0.5
         id: cargo-auth
         if: steps.registry.outputs.cargo_exists != 'true'
       - name: Publish Rust crate
