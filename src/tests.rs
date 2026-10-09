@@ -735,6 +735,29 @@ async fn daily_utc_rollover_and_install_deadline_survive_restart() {
 }
 
 #[tokio::test]
+async fn a_running_engine_sends_the_new_utc_days_heartbeat_without_exit() {
+    let server = Server::new(vec![]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let sdk = engine(dir.path(), &server.endpoint, "1788134400000");
+    sdk.init(KEY, None, None).await;
+    sdk.advance(3000).await;
+    assert_eq!(server.bodies().len(), 1);
+    // Each advance replies once the request it started is answered, so no flush or exit is
+    // needed to see the rollover heartbeat on the wire.
+    sdk.advance(86_400_000).await;
+    let bodies = server.bodies();
+    assert_eq!(bodies.len(), 2);
+    let events = bodies[1]["e"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["n"], "heartbeat");
+    assert!(server.requests.lock().unwrap()[1].contains("1788220803000"));
+    assert_eq!(sdk.export_state().await["last_heartbeat_day"], "20697");
+    sdk.advance(3000).await;
+    assert_eq!(server.bodies().len(), 2);
+    sdk.disable().await;
+}
+
+#[tokio::test]
 async fn invalid_endpoints_leave_the_sdk_inactive_with_no_request_ever_sent() {
     let server = Server::new(vec![]).await;
     let dir = tempfile::tempdir().unwrap();

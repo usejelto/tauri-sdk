@@ -12,6 +12,12 @@ use tokio::{
 };
 
 type Reply = oneshot::Sender<serde_json::Value>;
+
+/// C3b: the UTC day boundary must be seen on a clock that runs through system sleep, but tokio
+/// timers count the monotonic clock, which pauses while the machine sleeps. Capping real waits
+/// makes a woken machine re-read the wall clock within a minute; an early wake finds nothing due.
+const REAL_WAIT_CAP_MS: u64 = 60_000;
+
 enum Command {
     Init(String, Option<String>, Option<String>, InstallOrigin),
     Track(String, Props),
@@ -562,14 +568,17 @@ impl Worker {
         };
         self.store.observe_version(&self.options.av, event);
     }
-    fn heartbeat(&mut self, now: &BigInt) {
+    /// Queues the heartbeat for `now`'s UTC day unless one is already recorded; true when it did.
+    fn heartbeat(&mut self, now: &BigInt) -> bool {
         let day = now.div_floor(&BigInt::from(DAY)).to_string();
-        if self.store.state.last_heartbeat_day != day {
-            self.store.state.last_heartbeat_day = day;
-            self.store
-                .append(self.event("heartbeat", now, Props::new(), true));
-            self.store.checkpoint();
+        if self.store.state.last_heartbeat_day == day {
+            return false;
         }
+        self.store.state.last_heartbeat_day = day;
+        self.store
+            .append(self.event("heartbeat", now, Props::new(), true));
+        self.store.checkpoint();
+        true
     }
     fn track(&mut self, name: &str, props: Props) {
         if !grammar(name, 1, 64, "_:.-") {
@@ -636,7 +645,12 @@ impl Worker {
         if !self.active {
             return;
         }
-        self.heartbeat(now);
+        // C3b: a running SDK sends each new UTC day's heartbeat without another init, or an
+        // app left open across midnight counts only on the days it was launched. Sent like
+        // the install, so a pending two-second initial flush still carries it (C7).
+        if self.heartbeat(now) && self.init_flush.is_none() {
+            self.pending = true;
+        }
         let state = &mut self.store.state;
         if !state.install_claimed
             && whole(&state.install_first_try).is_some_and(|first| now >= &(first + CLAIM_AFTER))
@@ -764,7 +778,7 @@ impl Worker {
             .map(|v| (v - now).to_u64().unwrap_or(DAY))
             .min()
             .unwrap_or(DAY);
-        Duration::from_millis(ms.min(DAY))
+        Duration::from_millis(ms.min(REAL_WAIT_CAP_MS))
     }
     fn batch(&mut self, now: &BigInt, probe: bool) -> Option<Batch> {
         let metadata = self.metadata.as_ref()?;
@@ -1147,5 +1161,28 @@ mod tests {
         assert!(!valid_endpoint("https://u:p@example.com/v1/e"));
         assert!(!valid_endpoint("not a url"));
         assert!(!valid_endpoint(""));
+    }
+
+    #[tokio::test]
+    async fn real_clock_waits_reread_the_wall_clock_within_a_minute() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut worker = Worker::new(Options {
+            dir: Some(dir.path().into()),
+            av: "1.0.0".into(),
+            now: Some(BigInt::from(0)),
+            endpoint: "http://127.0.0.1:1/v1/e".into(),
+            debug: false,
+            version: None,
+            mock: None,
+        });
+        worker.initialize("prd_conform001".into(), None, None, InstallOrigin::Unknown);
+        worker.init_flush = None;
+        worker.store.state.install_claimed = true;
+        assert!(!worker.store.transition_pending);
+        // Nothing else is due: the nearest deadline is the next UTC midnight, a day away.
+        assert_eq!(
+            worker.next_wait(&BigInt::from(1)),
+            Duration::from_millis(REAL_WAIT_CAP_MS)
+        );
     }
 }
