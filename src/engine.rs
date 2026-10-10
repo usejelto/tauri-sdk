@@ -18,6 +18,10 @@ type Reply = oneshot::Sender<serde_json::Value>;
 /// makes a woken machine re-read the wall clock within a minute; an early wake finds nothing due.
 const REAL_WAIT_CAP_MS: u64 = 60_000;
 
+/// spec/wire-v1.md §8 (rev 0.26): a `stop.until` is honoured for at most 30 days past the
+/// moment the response was received; the post-`until` heartbeat re-reads a switch still on.
+const STOP_UNTIL_CAP_MS: u64 = 2_592_000_000;
+
 enum Command {
     Init(String, Option<String>, Option<String>, InstallOrigin),
     Track(String, Props),
@@ -930,6 +934,16 @@ impl Worker {
                 return;
             }
         }
+        let bound = now + BigInt::from(STOP_UNTIL_CAP_MS);
+        let until = if until > bound {
+            log(
+                self.options.debug,
+                "stop until bounded to 30 days from receipt (spec/wire-v1.md §8)",
+            );
+            bound
+        } else {
+            until
+        };
         self.store.state.stop_until = until.to_string();
         self.store.state.stop_probe_due = true;
         log(
@@ -1006,6 +1020,33 @@ mod tests {
             !accepted_ids.contains(&event.id)
         }));
         assert!(worker.store.contains("after_request"));
+    }
+
+    #[tokio::test]
+    async fn stop_until_is_bounded_to_thirty_days_from_receipt() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut worker = conformance_worker(dir.path());
+        let now = BigInt::from(3000);
+        worker.options.now = Some(now.clone());
+        worker.track("before_response", Props::new());
+        worker.pending = true;
+        worker.step(&now);
+        let request = worker.request.take().unwrap();
+        request.task.abort();
+        worker.answered(
+            request,
+            Outcome {
+                status: 202,
+                retry_after: None,
+                body: serde_json::json!({"stop": {"scope": "app", "until": 99999999999u64}}),
+            },
+        );
+        // spec/wire-v1.md §8 (rev 0.26): persisted as exactly 30 days from receipt.
+        assert_eq!(
+            worker.store.state.stop_until,
+            (now + BigInt::from(2_592_000_000u64)).to_string()
+        );
+        assert!(worker.store.state.stop_probe_due);
     }
 
     #[tokio::test]
