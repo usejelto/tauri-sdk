@@ -17,7 +17,13 @@ source root. The installable npm and Rust packages are written to `artifacts/`;
 example README for its prerequisites and setup commands.
 
 Register `.plugin(tauri_plugin_jelto::init())`, grant `jelto:default` to the local
-window's capability, and initialize only after the app's consent decision:
+window's capability, and initialize only after the app's consent decision.
+`jelto:default` includes `init`, `reset` and `disable`, so same-origin script in a
+window holding it can switch collection off or re-initialize with its own key and
+endpoint. When the app initializes from Rust instead (`app.jelto().init(..)` or
+`init_with_origin(..)` through `tauri_plugin_jelto::JeltoExt`), grant `jelto:collect`
+to windows that only collect: it allows `track`, `onboarding` and `setProps` and
+nothing else. Initializing from JavaScript looks like this:
 
 ```ts
 import jelto from '@jelto/tauri'

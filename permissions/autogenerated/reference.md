@@ -202,4 +202,17 @@ Denies the track command without any pre-configured scope.
 
 </td>
 </tr>
+
+<tr>
+<td>
+
+`jelto:collect`
+
+</td>
+<td>
+
+Allows the three collecting operations: track, onboarding and set_props. Grant to local application windows that only collect, when the app initializes from Rust through `JeltoExt::jelto().init` or `init_with_origin`. Script in such a window cannot init, read the install id, reset or disable.
+
+</td>
+</tr>
 </table>

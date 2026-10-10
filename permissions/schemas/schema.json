@@ -379,6 +379,12 @@
           "markdownDescription": "Denies the track command without any pre-configured scope."
         },
         {
+          "description": "Allows the three collecting operations: track, onboarding and set_props. Grant to local application windows that only collect, when the app initializes from Rust through `JeltoExt::jelto().init` or `init_with_origin`. Script in such a window cannot init, read the install id, reset or disable.\n#### This permission set includes:\n\n- `allow-track`\n- `allow-onboarding`\n- `allow-set-props`",
+          "type": "string",
+          "const": "collect",
+          "markdownDescription": "Allows the three collecting operations: track, onboarding and set_props. Grant to local application windows that only collect, when the app initializes from Rust through `JeltoExt::jelto().init` or `init_with_origin`. Script in such a window cannot init, read the install id, reset or disable.\n#### This permission set includes:\n\n- `allow-track`\n- `allow-onboarding`\n- `allow-set-props`"
+        },
+        {
           "description": "Allows the seven Jelto SDK operations. Grant only to chosen local application windows. Collection still requires explicit init.\n#### This default permission set includes:\n\n- `allow-init`\n- `allow-track`\n- `allow-onboarding`\n- `allow-set-props`\n- `allow-install-id`\n- `allow-reset`\n- `allow-disable`",
           "type": "string",
           "const": "default",
