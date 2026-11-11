@@ -58,14 +58,14 @@ UI integration on every supported platform.
 
 ## Checks and exceptions
 
-`make check` is the whole gate, and the command CI runs on Linux. It runs `lint`, `deadcode`, `test`, `build`, `package` and `security`; CI also builds the
+`make check` is the whole gate, and the command CI runs on Linux. It runs `lint`, `deadcode`, `format-check`, `test`, `build`, `package` and `security`; CI also builds the
 native example on every platform. `make hooks`
 enables two Git hooks once per clone: `commit-msg` rejects a subject that is
 not a Conventional Commit, and `pre-commit` runs gitleaks over the staged
 changes. Do not bypass them with `--no-verify`.
 
 The security targets and cargo-machete run separate programs, not project
-dependencies (ESLint and Knip are npm development dependencies).
+dependencies (ESLint, Knip and Prettier are npm development dependencies).
 `vendor/quality/tools.json` pins each one's exact version and SHA-256; the first run
 downloads and verifies it into `~/.cache/jelto-tools` (`JELTO_TOOLS_DIR`
 overrides the location), and `make tools` installs them all ahead of time.
@@ -76,6 +76,7 @@ overrides the location), and `make tools` installs them all ahead of time.
 |---|---|---|
 | `make lint` | ESLint, rustfmt, Clippy | `guest-js/` against the ESLint and typescript-eslint recommended rules; Rust formatting; Clippy's default lints as errors, and no `unwrap`, `expect` or `panic!` outside tests |
 | `make deadcode` | Knip, cargo-machete | unused files, exports and npm dependencies of `guest-js/`, and unlisted ones; Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
+| `make format-check` | Prettier | formatting of `guest-js/` and the root TypeScript, JavaScript and JSON configuration files (`npx prettier --write .` applies it) |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
 | `make sast` | opengrep | the community Rust, TypeScript, JavaScript, browser and Unicode rules, and the project's own rules in `.opengrep/` (each with its test cases beside it) |
@@ -89,6 +90,7 @@ place it applies, with the reason beside it:
 
 - ESLint: `// eslint-disable-next-line <rule> -- <reason>` above the line;
 - Clippy: `#[expect(clippy::<lint>, reason = "<why>")]` on the one item;
+- Prettier: `// prettier-ignore` above the one statement, with the reason;
 - Knip: an `ignore…` entry in `knip.config.ts` naming the one file or
   dependency, with the reason in a comment above it;
 - cargo-machete: the dependency in `ignored` under its manifest's

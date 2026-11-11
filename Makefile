@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test conformance conformance-run conformance-twice package example security check npm-audit cargo-audit lint deadcode machete
+.PHONY: build test conformance conformance-run conformance-twice package example security check npm-audit cargo-audit lint deadcode machete format-check
 
 # The shared quality targets (hooks, tools, secrets, osv, workflow-audit, sast)
 # arrive from the contracts repository as a checksummed snapshot; `make inputs`
@@ -64,15 +64,21 @@ example: node_modules
 # CI runs. The macOS and Windows rows repeat the platform-sensitive part (test
 # build package); every row also builds the native example, and conformance
 # twice runs on release or on request.
-check: lint deadcode test build package security
+check: lint deadcode format-check test build package security
 
+# ESLint over the TypeScript bindings in guest-js/ (eslint.config.js), then
 # rustfmt, then Clippy over every target of the crate with warnings as errors.
-# The lint levels are Cargo.toml's [lints.clippy]; clippy.toml holds settings.
-# ESLint covers the TypeScript bindings in guest-js/ (eslint.config.js).
+# Clippy's lint levels are Cargo.toml's [lints.clippy]; clippy.toml holds its
+# settings.
 lint: node_modules
 	npx --no-install eslint --max-warnings 0 .
 	$(CARGO) fmt --check
 	$(CARGO) clippy --locked --all-targets --features conformance -- -D warnings
+
+# Prettier over guest-js/ and the root TypeScript, JavaScript and JSON
+# configuration files; .prettierignore names that scope and why.
+format-check: node_modules
+	npx --no-install prettier --check .
 
 # Knip (knip.config.ts) for guest-js/, and cargo-machete for the Rust manifests.
 deadcode: knip machete
