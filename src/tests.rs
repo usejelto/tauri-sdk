@@ -209,11 +209,7 @@ async fn reset_origin_is_unknown_and_disable_reinit_accepts_a_fresh_hint() {
         .flat_map(|b| b["e"].as_array().unwrap().clone())
         .collect();
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e["n"] == "install")
-            .last()
-            .unwrap()["props"],
+        events.iter().rfind(|e| e["n"] == "install").unwrap()["props"],
         json!({"install_origin":"new"})
     );
     sdk.disable().await;

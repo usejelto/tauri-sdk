@@ -38,6 +38,17 @@ tauri = { version = "2", default-features = false, features = ["test"] }
 tauri-utils = "2"
 toml = "0.8"
 
+# Clippy lints for this crate's own targets (`make lint`). Shipped code reports
+# failure through `Result` or degrades quietly, never by aborting the host
+# application, so these three are errors; clippy.toml allows them in tests.
+[lints.clippy]
+# `Option::unwrap` and `Result::unwrap` abort on the unexpected case.
+unwrap_used = "deny"
+# `expect` is `unwrap` with a message: the same abort.
+expect_used = "deny"
+# An explicit `panic!` aborts the same way.
+panic = "deny"
+
 [[bin]]
 name = "conformance-host"
 path = "src/bin/conformance-host.rs"

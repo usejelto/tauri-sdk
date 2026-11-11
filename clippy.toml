@@ -1,0 +1,6 @@
+# Clippy settings for `make lint`; the lint levels live in Cargo.toml's
+# [lints.clippy]. Tests assert by unwrapping and panicking, which is how a
+# failed test reports, so the three abort lints apply to shipped code only.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

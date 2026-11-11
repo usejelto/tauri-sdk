@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test conformance conformance-run conformance-twice package example security check npm-audit cargo-audit
+.PHONY: build test conformance conformance-run conformance-twice package example security check npm-audit cargo-audit lint
 
 # The shared quality targets (hooks, tools, secrets, osv, workflow-audit, sast)
 # arrive from the contracts repository as a checksummed snapshot; `make inputs`
@@ -58,7 +58,13 @@ example: node_modules
 # CI runs. The macOS and Windows rows repeat the platform-sensitive part (test
 # build package); every row also builds the native example, and conformance
 # twice runs on release or on request.
-check: test build package security
+check: lint test build package security
+
+# rustfmt, then Clippy over every target of the crate with warnings as errors.
+# The lint levels are Cargo.toml's [lints.clippy]; clippy.toml holds settings.
+lint:
+	$(CARGO) fmt --check
+	$(CARGO) clippy --locked --all-targets --features conformance -- -D warnings
 
 security: secrets workflow-audit osv npm-audit cargo-audit
 
