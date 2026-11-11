@@ -50,7 +50,7 @@ jobs:
           python-version: '3.14'
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version-file: .nvmrc
           package-manager-cache: false
       - name: Pinned npm packaging toolchain
         # Outside the lockfile on purpose: the packaging toolchain itself, pinned

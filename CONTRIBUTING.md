@@ -15,7 +15,7 @@ For installation and account help, see [SUPPORT.md](SUPPORT.md).
 
 ## Local development
 
-Rust 1.94.0 (see `rust-toolchain.toml`), Node.js 24, npm, Make, Python 3.11 or later, and the Go toolchain required by the contracts archive. Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS to run the desktop tests and example. Set `CARGO=/absolute/path/to/cargo` if needed.
+Rust 1.94.0 (see `rust-toolchain.toml`), Node.js 24.22.2 (the release `.nvmrc` pins), npm, Make, Python 3.11 or later, and the Go toolchain required by the contracts archive. Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS to run the desktop tests and example. Set `CARGO=/absolute/path/to/cargo` if needed.
 
 Fork and clone this repository, create a branch from `main`, and run commands
 from this component's root. The standalone checkout contains its build inputs;
