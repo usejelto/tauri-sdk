@@ -74,7 +74,7 @@ overrides the location), and `make tools` installs them all ahead of time.
 | Target | Tool | What it checks |
 |---|---|---|
 | `make lint` | ESLint, rustfmt, Clippy | `guest-js/` against the ESLint and typescript-eslint recommended rules; Rust formatting; Clippy's default lints as errors, and no `unwrap`, `expect` or `panic!` outside tests |
-| `make deadcode` | cargo-machete | Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
+| `make deadcode` | Knip, cargo-machete | unused files, exports and npm dependencies of `guest-js/`, and unlisted ones; Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
 | `make osv` | OSV-Scanner | `Cargo.lock`, `package-lock.json` and the example's lockfiles against the OSV database, downloaded and matched locally |
@@ -87,6 +87,8 @@ place it applies, with the reason beside it:
 
 - ESLint: `// eslint-disable-next-line <rule> -- <reason>` above the line;
 - Clippy: `#[expect(clippy::<lint>, reason = "<why>")]` on the one item;
+- Knip: an `ignore…` entry in `knip.config.ts` naming the one file or
+  dependency, with the reason in a comment above it;
 - cargo-machete: the dependency in `ignored` under its manifest's
   `[package.metadata.cargo-machete]`, with a comment saying what uses it;
 - gitleaks: a `.gitleaks.toml` allowlist entry naming the one literal and why;

@@ -68,7 +68,10 @@ lint: node_modules
 	$(CARGO) fmt --check
 	$(CARGO) clippy --locked --all-targets --features conformance -- -D warnings
 
-deadcode: machete
+# Knip (knip.config.ts) for guest-js/, and cargo-machete for the Rust manifests.
+deadcode: knip machete
+
+knip: node_modules
 
 # Cargo dependencies that no source file names, for the crate and the native
 # example: cargo-machete walks every Cargo.toml below the root that Git does
