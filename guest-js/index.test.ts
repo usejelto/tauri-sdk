@@ -9,7 +9,10 @@ describe('Tauri IPC bindings', () => {
   it('passes optional install origin to initialization without exposing it as a heartbeat property', async () => {
     await jelto.init('prd_conform001', 'desktop', undefined, 'existing')
     expect(invoke).toHaveBeenLastCalledWith('plugin:jelto|init', {
-      key: 'prd_conform001', app: 'desktop', endpoint: undefined, installOrigin: 'existing',
+      key: 'prd_conform001',
+      app: 'desktop',
+      endpoint: undefined,
+      installOrigin: 'existing',
     })
   })
   it('routes all seven operations and scalar props to the shared plugin', async () => {
@@ -36,7 +39,9 @@ describe('Tauri IPC bindings', () => {
     expect(await jelto.installId()).toBe('')
   })
   it('swallows synchronous serialization errors and invalid identity replies', async () => {
-    vi.mocked(invoke).mockImplementation(() => { throw new TypeError('serialization failed') })
+    vi.mocked(invoke).mockImplementation(() => {
+      throw new TypeError('serialization failed')
+    })
     await expect(jelto.track('x')).resolves.toBeUndefined()
     expect(await jelto.installId()).toBe('')
     vi.mocked(invoke).mockResolvedValue(null)
