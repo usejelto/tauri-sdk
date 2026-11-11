@@ -73,7 +73,7 @@ overrides the location), and `make tools` installs them all ahead of time.
 
 | Target | Tool | What it checks |
 |---|---|---|
-| `make lint` | rustfmt, Clippy | Rust formatting; Clippy's default lints as errors, and no `unwrap`, `expect` or `panic!` outside tests |
+| `make lint` | ESLint, rustfmt, Clippy | `guest-js/` against the ESLint and typescript-eslint recommended rules; Rust formatting; Clippy's default lints as errors, and no `unwrap`, `expect` or `panic!` outside tests |
 | `make deadcode` | cargo-machete | Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
@@ -85,6 +85,7 @@ When a check reports something, fix a real problem in the same change. A
 deliberate exception, or a finding the tool got wrong, is marked at the one
 place it applies, with the reason beside it:
 
+- ESLint: `// eslint-disable-next-line <rule> -- <reason>` above the line;
 - Clippy: `#[expect(clippy::<lint>, reason = "<why>")]` on the one item;
 - cargo-machete: the dependency in `ignored` under its manifest's
   `[package.metadata.cargo-machete]`, with a comment saying what uses it;

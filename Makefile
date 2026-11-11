@@ -62,7 +62,9 @@ check: lint deadcode test build package security
 
 # rustfmt, then Clippy over every target of the crate with warnings as errors.
 # The lint levels are Cargo.toml's [lints.clippy]; clippy.toml holds settings.
-lint:
+# ESLint covers the TypeScript bindings in guest-js/ (eslint.config.js).
+lint: node_modules
+	npx --no-install eslint --max-warnings 0 .
 	$(CARGO) fmt --check
 	$(CARGO) clippy --locked --all-targets --features conformance -- -D warnings
 
