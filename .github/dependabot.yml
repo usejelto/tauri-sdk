@@ -16,3 +16,33 @@ updates:
       default-days: 7
     commit-message:
       prefix: chore(deps)
+  # The plugin crate's dependencies; the native example follows them.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    groups:
+      cargo:
+        patterns: ['*']
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore(deps)
+  # The guest bindings' development dependencies.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    groups:
+      npm:
+        patterns: ['*']
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore(deps)
