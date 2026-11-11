@@ -5,6 +5,12 @@
 # arrive from the contracts repository as a checksummed snapshot; `make inputs`
 # in the backend refreshes it, and nothing edits it here.
 include vendor/quality/quality.mk
+# opengrep community rules for the Rust crate, the TypeScript bindings (which
+# run in a webview) and the JavaScript build helper, and the Unicode rule for
+# bidirectional control characters, which covers the Rust, TypeScript,
+# JavaScript, Python, JSON and YAML files.
+QUALITY_COMMUNITY_RULES = rust/lang/security typescript/lang/security typescript/lang/correctness \
+	javascript/lang/security javascript/lang/correctness javascript/browser/security generic/unicode/security
 CARGO ?= cargo
 JELTO_CONTRACTS_DIR ?=
 JELTO_CONTRACTS_VERSION = $(shell python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$(JELTO_CONTRACTS_DIR)/spec/contracts/manifest.json")
@@ -79,7 +85,7 @@ knip: node_modules
 machete:
 	$(QUALITY_TOOL) run cargo-machete --skip-target-dir .
 
-security: secrets workflow-audit osv npm-audit cargo-audit
+security: secrets workflow-audit osv npm-audit cargo-audit sast
 
 npm-audit:
 	npm audit --audit-level=moderate --package-lock-only

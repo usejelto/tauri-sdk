@@ -64,7 +64,8 @@ enables two Git hooks once per clone: `commit-msg` rejects a subject that is
 not a Conventional Commit, and `pre-commit` runs gitleaks over the staged
 changes. Do not bypass them with `--no-verify`.
 
-The security targets run separate programs, not project dependencies.
+The security targets and cargo-machete run separate programs, not project
+dependencies (ESLint and Knip are npm development dependencies).
 `vendor/quality/tools.json` pins each one's exact version and SHA-256; the first run
 downloads and verifies it into `~/.cache/jelto-tools` (`JELTO_TOOLS_DIR`
 overrides the location), and `make tools` installs them all ahead of time.
@@ -77,6 +78,7 @@ overrides the location), and `make tools` installs them all ahead of time.
 | `make deadcode` | Knip, cargo-machete | unused files, exports and npm dependencies of `guest-js/`, and unlisted ones; Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
+| `make sast` | opengrep | the community Rust, TypeScript, JavaScript, browser and Unicode rules, and the project's own rules in `.opengrep/` (each with its test cases beside it) |
 | `make osv` | OSV-Scanner | `Cargo.lock`, `package-lock.json` and the example's lockfiles against the OSV database, downloaded and matched locally |
 | `make npm-audit` | npm audit | `package-lock.json` against the npm advisory database |
 | `make cargo-audit` | cargo-audit | `Cargo.lock` against the RustSec advisory database |
@@ -91,6 +93,8 @@ place it applies, with the reason beside it:
   dependency, with the reason in a comment above it;
 - cargo-machete: the dependency in `ignored` under its manifest's
   `[package.metadata.cargo-machete]`, with a comment saying what uses it;
+- opengrep: `// nosemgrep: <rule-id> -- <reason>` at the end of the finding's
+  first line (`#` in TOML, YAML and the Makefile);
 - gitleaks: a `.gitleaks.toml` allowlist entry naming the one literal and why;
 - zizmor: `# zizmor: ignore[<audit>]` on the line, with the reason above it;
 - OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
