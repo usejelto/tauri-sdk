@@ -54,4 +54,4 @@ example: node_modules
 	cd example && npm ci
 	cd example && npm run tauri build -- --no-bundle
 
-security: secrets workflow-audit
+security: secrets workflow-audit osv

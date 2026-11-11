@@ -1,0 +1,39 @@
+# OSV-Scanner exceptions. Each entry names one advisory, why it does not apply
+# here, and a date after which it stops applying and is reviewed again. All of
+# them come from Tauri's own dependency tree; both lockfiles (the crate and the
+# native example) carry the same versions.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "glib 0.18.5 (unsound VariantStrIter iterators) is pulled in only on Linux, by Tauri's GTK and WebKitGTK backend (gtk-rs 0.18). This crate does not use glib itself, only a Tauri release that moves to gtk-rs 0.20 can remove it, and a library's Cargo.lock does not reach the applications that depend on it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "proc-macro-error is unmaintained, not vulnerable: a build-time dependency of the gtk-rs 0.18 macros on Linux, which only a Tauri release can replace."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0075"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "unic-char-range is unmaintained, not vulnerable: tauri-utils pulls it in through urlpattern for tauri, tauri-build, tauri-codegen, tauri-macros and tauri-plugin, so only a Tauri release can replace it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0080"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "unic-common is unmaintained, not vulnerable: tauri-utils pulls it in through urlpattern for tauri, tauri-build, tauri-codegen, tauri-macros and tauri-plugin, so only a Tauri release can replace it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0081"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "unic-char-property is unmaintained, not vulnerable: tauri-utils pulls it in through urlpattern for tauri, tauri-build, tauri-codegen, tauri-macros and tauri-plugin, so only a Tauri release can replace it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0098"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "unic-ucd-version is unmaintained, not vulnerable: tauri-utils pulls it in through urlpattern for tauri, tauri-build, tauri-codegen, tauri-macros and tauri-plugin, so only a Tauri release can replace it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0100"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "unic-ucd-ident is unmaintained, not vulnerable: tauri-utils pulls it in through urlpattern for tauri, tauri-build, tauri-codegen, tauri-macros and tauri-plugin, so only a Tauri release can replace it."
