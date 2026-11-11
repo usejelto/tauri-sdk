@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test conformance conformance-run conformance-twice package example
+.PHONY: build test conformance conformance-run conformance-twice package example security
 
 # The shared quality targets (hooks, tools, secrets, osv, workflow-audit, sast)
 # arrive from the contracts repository as a checksummed snapshot; `make inputs`
@@ -53,3 +53,5 @@ example: node_modules
 	node scripts/prepare-example.mjs
 	cd example && npm ci
 	cd example && npm run tauri build -- --no-bundle
+
+security: secrets
