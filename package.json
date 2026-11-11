@@ -34,13 +34,22 @@
     "@tauri-apps/api": "^2.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/api": "^2.0.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "knip": "^6.45.1",
+    "prettier": "^3.10.0",
     "typescript": "5.9.3",
+    "typescript-eslint": "^8.72.2",
     "vite": "7.3.7",
     "vitest": "5.0.5"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "overrides": {
+    "minimatch": "11.0.1"
   }
 }
