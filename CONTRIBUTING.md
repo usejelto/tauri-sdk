@@ -56,6 +56,41 @@ Use the contracts wire and conformance specifications for expected behavior.
 Report the tested OS and toolchain: headless conformance does not certify desktop
 UI integration on every supported platform.
 
+## Checks and exceptions
+
+`make check` is the whole gate, and the command CI runs on Linux. It runs `test`, `build`, `package` and `security`; CI also builds the
+native example on every platform. `make hooks`
+enables two Git hooks once per clone: `commit-msg` rejects a subject that is
+not a Conventional Commit, and `pre-commit` runs gitleaks over the staged
+changes. Do not bypass them with `--no-verify`.
+
+The security targets run separate programs, not project dependencies.
+`vendor/quality/tools.json` pins each one's exact version and SHA-256; the first run
+downloads and verifies it into `~/.cache/jelto-tools` (`JELTO_TOOLS_DIR`
+overrides the location), and `make tools` installs them all ahead of time.
+`vendor/quality/` is a checksummed snapshot of the contracts repository's
+`tools/quality/`; change it there, not here.
+
+| Target | Tool | What it checks |
+|---|---|---|
+| `make secrets` | gitleaks | the whole Git history for credentials |
+| `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
+| `make osv` | OSV-Scanner | `Cargo.lock`, `package-lock.json` and the example's lockfiles against the OSV database, downloaded and matched locally |
+| `make npm-audit` | npm audit | `package-lock.json` against the npm advisory database |
+| `make cargo-audit` | cargo-audit | `Cargo.lock` against the RustSec advisory database |
+
+When a check reports something, fix a real problem in the same change. A
+deliberate exception, or a finding the tool got wrong, is marked at the one
+place it applies, with the reason beside it:
+
+- gitleaks: a `.gitleaks.toml` allowlist entry naming the one literal and why;
+- zizmor: `# zizmor: ignore[<audit>]` on the line, with the reason above it;
+- OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
+  `reason` and an `ignoreUntil` date.
+
+Never disable a rule, a file or a directory wholesale, and never relax a
+threshold to make a check pass.
+
 ## Review and acceptance
 
 Keep changes focused and match the surrounding style.

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := test
-.PHONY: build test conformance conformance-run conformance-twice package example security
+.PHONY: build test conformance conformance-run conformance-twice package example security check npm-audit cargo-audit
 
 # The shared quality targets (hooks, tools, secrets, osv, workflow-audit, sast)
 # arrive from the contracts repository as a checksummed snapshot; `make inputs`
@@ -54,4 +54,18 @@ example: node_modules
 	cd example && npm ci
 	cd example && npm run tauri build -- --no-bundle
 
-security: secrets workflow-audit osv
+# The whole gate: what to run before a pull request, and what the Linux row of
+# CI runs. The macOS and Windows rows repeat the platform-sensitive part (test
+# build package); every row also builds the native example, and conformance
+# twice runs on release or on request.
+check: test build package security
+
+security: secrets workflow-audit osv npm-audit cargo-audit
+
+npm-audit:
+	npm audit --audit-level=moderate --package-lock-only
+
+# RustSec's own scanner, beside OSV-Scanner. CI installs the pinned
+# cargo-audit; locally, `cargo install cargo-audit --locked` provides it.
+cargo-audit:
+	$(CARGO) audit

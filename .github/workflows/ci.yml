@@ -43,6 +43,8 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          # make check scans the whole Git history for secrets.
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -54,8 +56,6 @@ jobs:
         # Outside the lockfile on purpose: the packaging toolchain itself, pinned
         # to an exact release and installed without lifecycle scripts.
         run: npm install --global npm@11.21.0 --ignore-scripts # zizmor: ignore[adhoc-packages]
-      - name: Dependency vulnerability check
-        run: npm audit --audit-level=moderate --package-lock-only
       - name: Install verified contracts pin
         if: inputs.release || inputs.conformance
         run: python3 vendor/release-tools/release.py contracts
@@ -85,10 +85,14 @@ jobs:
           # A prebuilt, checksum-verified binary; compiling cargo-audit from
           # source cost three minutes on every run.
           tool: cargo-audit@0.22.2
-      - name: Cargo dependency vulnerability check
+      # The same command a contributor runs: tests, packages and the security
+      # scans (npm audit and cargo audit among them). The scanners do not
+      # depend on the platform, so the other rows repeat the rest.
+      - name: Checks
         if: runner.os == 'Linux'
-        run: cargo audit
+        run: make check
       - name: Component tests and packages
+        if: runner.os != 'Linux'
         run: make test build package
       - name: Conformance twice
         if: inputs.release || inputs.conformance
