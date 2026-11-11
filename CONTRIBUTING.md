@@ -58,7 +58,7 @@ UI integration on every supported platform.
 
 ## Checks and exceptions
 
-`make check` is the whole gate, and the command CI runs on Linux. It runs `lint`, `test`, `build`, `package` and `security`; CI also builds the
+`make check` is the whole gate, and the command CI runs on Linux. It runs `lint`, `deadcode`, `test`, `build`, `package` and `security`; CI also builds the
 native example on every platform. `make hooks`
 enables two Git hooks once per clone: `commit-msg` rejects a subject that is
 not a Conventional Commit, and `pre-commit` runs gitleaks over the staged
@@ -74,6 +74,7 @@ overrides the location), and `make tools` installs them all ahead of time.
 | Target | Tool | What it checks |
 |---|---|---|
 | `make lint` | rustfmt, Clippy | Rust formatting; Clippy's default lints as errors, and no `unwrap`, `expect` or `panic!` outside tests |
+| `make deadcode` | cargo-machete | Cargo dependencies of the crate and of `example/src-tauri` that no source file uses |
 | `make secrets` | gitleaks | the whole Git history for credentials |
 | `make workflow-audit` | actionlint, zizmor | workflow syntax, script injection, permissions and pinning |
 | `make osv` | OSV-Scanner | `Cargo.lock`, `package-lock.json` and the example's lockfiles against the OSV database, downloaded and matched locally |
@@ -85,6 +86,8 @@ deliberate exception, or a finding the tool got wrong, is marked at the one
 place it applies, with the reason beside it:
 
 - Clippy: `#[expect(clippy::<lint>, reason = "<why>")]` on the one item;
+- cargo-machete: the dependency in `ignored` under its manifest's
+  `[package.metadata.cargo-machete]`, with a comment saying what uses it;
 - gitleaks: a `.gitleaks.toml` allowlist entry naming the one literal and why;
 - zizmor: `# zizmor: ignore[<audit>]` on the line, with the reason above it;
 - OSV-Scanner: an `[[IgnoredVulns]]` entry in `osv-scanner.toml` with a
